@@ -6,11 +6,9 @@ import "./styles/pill.css";
 import React, { useEffect, useRef, useState } from "react";
 import ReactDOM from "react-dom/client";
 import { api, events, isTauri } from "./lib/api";
-import type { DictationStateName } from "./lib/ipc";
+import type { DictationStateEvent, DictationStateName } from "./lib/ipc";
 import { forceDictationState } from "./lib/mock";
 import { Waveform } from "./components/Waveform";
-
-type Mode = "hybrid" | "push_to_talk" | "toggle";
 
 const AUTO_HIDE_MS: Partial<Record<string, number>> = {
   "done:pasted": 900,
@@ -45,7 +43,7 @@ function Pill() {
   const [state, setState] = useState<DictationStateName>("idle");
   const [message, setMessage] = useState<string | undefined>();
   const [visible, setVisible] = useState(false);
-  const [mode] = useState<Mode>("hybrid");
+  const [mode, setMode] = useState<DictationStateEvent["mode"]>();
   const levelRef = useRef(0);
   const reducedMotion = useReducedMotion();
 
@@ -59,6 +57,7 @@ function Pill() {
     events.onDictationState((e) => {
       setState(e.state);
       setMessage(e.message);
+      setMode(e.mode);
     }).then((u) => (unlisten = u));
     events.onDictationLevel((e) => {
       levelRef.current = e.level;

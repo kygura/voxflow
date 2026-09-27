@@ -69,6 +69,8 @@ export type Status = z.infer<typeof StatusSchema>;
 export const DictationStateEventSchema = z.object({
   state: DictationStateNameSchema,
   message: z.string().optional(),
+  // Recording only: "push_to_talk" while the hotkey is held, "toggle" when hands-free.
+  mode: z.enum(["push_to_talk", "toggle"]).optional(),
 });
 export type DictationStateEvent = z.infer<typeof DictationStateEventSchema>;
 

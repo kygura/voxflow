@@ -19,3 +19,6 @@ tauri-plugin-single-instance = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 voxflow-core = { path = "../core" }
+# Default `v1` feature = Windows Credential Manager + Secret Service (zbus) on Linux.
+# 4.x has no store-only mode: without `v1` (or `cli`) the crate is a compile_error.
+keyring = "4.2"
