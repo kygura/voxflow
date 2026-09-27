@@ -1,0 +1,21 @@
+[package]
+name = "voxflow"
+version.workspace = true
+description = "VoxFlow: desktop voice dictation app"
+edition.workspace = true
+
+[lib]
+name = "voxflow_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = "2"
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-opener = "2"
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-single-instance = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+voxflow-core = { path = "../core" }
