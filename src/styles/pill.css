@@ -41,7 +41,7 @@ body {
   box-shadow: var(--sh-pill);
   display: flex;
   align-items: center;
-  gap: var(--sp-3);
+  gap: var(--sp-2);
   padding: 0 12px 0 16px;
   cursor: default;
   opacity: 0;
@@ -127,6 +127,14 @@ body {
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .pill-spinner {
+    animation: none;
+    border-color: transparent;
+    border-top-color: var(--accent);
+  }
+}
+
 .pill-glyph--error {
   color: var(--err);
 }
@@ -150,6 +158,7 @@ body {
 
 .pill-status-text--error {
   color: var(--text-0);
+  font-size: var(--fs-xs);
 }
 
 .pill-transcribing-text {
@@ -169,6 +178,40 @@ body {
   }
   to {
     background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pill-transcribing-text {
+    animation: none;
+    background: none;
+    -webkit-text-fill-color: unset;
+    -webkit-background-clip: unset;
+    background-clip: unset;
+    color: var(--text-0);
+  }
+
+  .pill-transcribing-dot {
+    animation: pill-dot-blink 1.5s steps(1) infinite;
+  }
+
+  .pill-transcribing-dot:nth-of-type(2) {
+    animation-delay: 0.5s;
+  }
+
+  .pill-transcribing-dot:nth-of-type(3) {
+    animation-delay: 1s;
+  }
+
+  @keyframes pill-dot-blink {
+    0%,
+    33% {
+      opacity: 1;
+    }
+    34%,
+    100% {
+      opacity: 0.3;
+    }
   }
 }
 

@@ -9,6 +9,7 @@ import { api, events, isTauri } from "./lib/api";
 import type { DictationStateEvent, DictationStateName } from "./lib/ipc";
 import { forceDictationState } from "./lib/mock";
 import { Waveform } from "./components/Waveform";
+import { applyTheme } from "./lib/theme";
 
 const AUTO_HIDE_MS: Partial<Record<string, number>> = {
   "done:pasted": 900,
@@ -29,16 +30,6 @@ function useReducedMotion() {
   return reduced;
 }
 
-function applyTheme(theme: "system" | "dark" | "light") {
-  const resolved =
-    theme === "system"
-      ? window.matchMedia("(prefers-color-scheme: light)").matches
-        ? "light"
-        : "dark"
-      : theme;
-  document.documentElement.dataset.theme = resolved;
-}
-
 function Pill() {
   const [state, setState] = useState<DictationStateName>("idle");
   const [message, setMessage] = useState<string | undefined>();
@@ -49,6 +40,11 @@ function Pill() {
 
   useEffect(() => {
     api.getSettings().then((s) => applyTheme(s.theme));
+    let unlistenSettings: (() => void) | undefined;
+    events.onSettingsChanged(() => {
+      api.getSettings().then((s) => applyTheme(s.theme));
+    }).then((u) => (unlistenSettings = u));
+    return () => unlistenSettings?.();
   }, []);
 
   useEffect(() => {
@@ -147,7 +143,14 @@ function Pill() {
 
         <div className="pill-content" role="status" aria-live="polite">
           {isRecording && <Waveform levelRef={levelRef} reducedMotion={reducedMotion} />}
-          {isTranscribing && <span className="pill-transcribing-text">Transcribing…</span>}
+          {isTranscribing && (
+            <span className="pill-transcribing-text">
+              Transcribing
+              <span className="pill-transcribing-dot">.</span>
+              <span className="pill-transcribing-dot">.</span>
+              <span className="pill-transcribing-dot">.</span>
+            </span>
+          )}
           {isDone && <span className="pill-status-text">{statusText}</span>}
           {isError && (
             <span className="pill-status-text pill-status-text--error">

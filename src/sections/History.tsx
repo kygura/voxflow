@@ -147,7 +147,7 @@ export function History({
 }
 
 function hotkeyLabel(hotkey: string) {
-  return hotkey.replace(/CommandOrControl/g, "Ctrl").replace(/\+/g, "+");
+  return hotkey.replace(/CommandOrControl/g, "Ctrl");
 }
 
 function highlight(text: string, query: string) {

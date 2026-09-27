@@ -94,11 +94,6 @@ export type DownloadDone = z.infer<typeof DownloadDoneSchema>;
 
 export const InputDeviceListSchema = z.array(z.string());
 
-export const NavigateEventSchema = z.object({
-  section: z.enum(["general", "transcription", "history", "about"]),
-});
-export type NavigateEvent = z.infer<typeof NavigateEventSchema>;
-
 // --- commands ---------------------------------------------------------
 
 export const ipc = {
@@ -106,7 +101,6 @@ export const ipc = {
   saveSettings: (settings: Settings) => invoke<void>("save_settings", { settings }),
   setApiKey: (key: string) => invoke<void>("set_api_key", { key }),
   clearApiKey: () => invoke<void>("clear_api_key"),
-  hasApiKey: () => invoke("has_api_key").then((v) => z.boolean().parse(v)),
   listModels: () => invoke("list_models").then((v) => ModelInfoListSchema.parse(v)),
   downloadModel: (name: string) => invoke<void>("download_model", { name }),
   cancelDownload: (name: string) => invoke<void>("cancel_download", { name }),
@@ -159,8 +153,8 @@ export function onHistoryChanged(cb: () => void): Promise<UnlistenFn> {
   return listen("history://changed", () => cb());
 }
 
-export function onNavigate(cb: (e: NavigateEvent) => void): Promise<UnlistenFn> {
-  return listen("app://navigate", (e) => cb(NavigateEventSchema.parse(e.payload)));
+export function onSettingsChanged(cb: () => void): Promise<UnlistenFn> {
+  return listen("settings://changed", () => cb());
 }
 
 export const isTauri = () => "__TAURI_INTERNALS__" in window;

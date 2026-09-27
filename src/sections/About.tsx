@@ -55,15 +55,11 @@ export function About({ settings, status }: { settings: Settings; status: Status
       <div className="shortcuts-table">
         {SHORTCUTS.map(([combo, desc]) => (
           <div className="shortcuts-row" key={combo}>
-            <KeyCombo combo={combo === "Ctrl Shift Space" ? hotkeyDisplay(settings.hotkey) : combo} />
+            <KeyCombo combo={combo === "Ctrl Shift Space" ? settings.hotkey : combo} />
             <span>{desc}</span>
           </div>
         ))}
       </div>
     </>
   );
-}
-
-function hotkeyDisplay(hotkey: string) {
-  return hotkey;
 }

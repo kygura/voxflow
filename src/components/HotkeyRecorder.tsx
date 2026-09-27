@@ -25,7 +25,6 @@ export function HotkeyRecorder({
   const [liveMods, setLiveMods] = useState<string[]>([]);
   const [error, setError] = useState<string | undefined>(invalidMessage);
   const revertTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const boxRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => setError(invalidMessage), [invalidMessage]);
 
@@ -75,7 +74,6 @@ export function HotkeyRecorder({
   return (
     <div className="hotkey-recorder-wrap">
       <button
-        ref={boxRef}
         type="button"
         className={`hotkey-recorder hotkey-recorder--${phase}`}
         onClick={() => (phase === "idle" ? start() : undefined)}

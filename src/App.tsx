@@ -7,19 +7,10 @@ import { General } from "./sections/General";
 import { Transcription } from "./sections/Transcription";
 import { History } from "./sections/History";
 import { About } from "./sections/About";
+import { applyTheme } from "./lib/theme";
 
 type Section = "general" | "transcription" | "history" | "about";
 const SECTIONS: Section[] = ["general", "transcription", "history", "about"];
-
-function applyTheme(theme: Settings["theme"]) {
-  const resolved =
-    theme === "system"
-      ? window.matchMedia("(prefers-color-scheme: light)").matches
-        ? "light"
-        : "dark"
-      : theme;
-  document.documentElement.dataset.theme = resolved;
-}
 
 export default function App() {
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -48,12 +39,9 @@ export default function App() {
   }, [settings?.theme]);
 
   useEffect(() => {
-    let unlisten: (() => void) | undefined;
-    events.onNavigate((e) => setSection(e.section as Section)).then((u) => (unlisten = u));
     const params = new URLSearchParams(window.location.search);
     const initial = params.get("section");
     if (initial && SECTIONS.includes(initial as Section)) setSection(initial as Section);
-    return () => unlisten?.();
   }, []);
 
   useEffect(() => {
@@ -113,7 +101,7 @@ export default function App() {
       await api.saveSettings(next);
       return true;
     } catch (err) {
-      setSettings(settings); // revert
+      setSettings(await api.getSettings());
       setStatus((prev) => (prev ? { ...prev, lastError: String(err) } : prev));
       setBannerDismissed(false);
       return false;

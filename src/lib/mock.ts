@@ -99,7 +99,6 @@ export const mockApi = {
   clearApiKey: async () => {
     apiKeySaved = false;
   },
-  hasApiKey: async () => apiKeySaved,
   listModels: async (): Promise<ModelInfo[]> =>
     CATALOG.map((m) => ({
       name: m.name,
@@ -208,7 +207,7 @@ export const mockEvents = {
     historyListeners.add(cb);
     return () => historyListeners.delete(cb);
   },
-  onNavigate: async () => () => {},
+  onSettingsChanged: async () => () => {},
 };
 
 /** Used only by pill.tsx?demo to force a visual state without a full flow. */

@@ -87,6 +87,23 @@ function LocalPanel({
 
   const refresh = () => api.listModels().then(setModels);
 
+  const startDownload = (name: string) => {
+    setErrors((er) => {
+      const next = { ...er };
+      delete next[name];
+      return next;
+    });
+    setProgress((p) => ({ ...p, [name]: { downloaded: 0, total: 0 } }));
+    api.downloadModel(name).catch((err) => {
+      setProgress((p) => {
+        const next = { ...p };
+        delete next[name];
+        return next;
+      });
+      setErrors((er) => ({ ...er, [name]: String(err) }));
+    });
+  };
+
   useEffect(() => {
     refresh();
     const unlistenProgress = events.onModelsProgress((e) =>
@@ -145,17 +162,22 @@ function LocalPanel({
               progress={progress[m.name]}
               error={errors[m.name]}
               confirmingDelete={confirmDelete === m.name}
-              onDownload={() => api.downloadModel(m.name)}
+              onDownload={() => startDownload(m.name)}
               onCancel={() => api.cancelDownload(m.name)}
               onUse={() => onSave({ localModel: m.name })}
               onDeleteRequest={() => setConfirmDelete(m.name)}
               onDeleteCancel={() => setConfirmDelete(null)}
               onDeleteConfirm={async () => {
-                await api.deleteModel(m.name);
-                setConfirmDelete(null);
-                refresh();
+                try {
+                  await api.deleteModel(m.name);
+                  refresh();
+                } catch (err) {
+                  setErrors((er) => ({ ...er, [m.name]: String(err) }));
+                } finally {
+                  setConfirmDelete(null);
+                }
               }}
-              onRetry={() => api.downloadModel(m.name)}
+              onRetry={() => startDownload(m.name)}
             />
           ))}
         </div>
@@ -191,7 +213,8 @@ function ModelRow({
   onDeleteConfirm: () => void;
   onRetry: () => void;
 }) {
-  const pct = progress ? Math.round((progress.downloaded / Math.max(1, progress.total)) * 100) : 0;
+  const indeterminate = !!progress && progress.total === 0;
+  const pct = progress && !indeterminate ? Math.round((progress.downloaded / progress.total) * 100) : 0;
   return (
     <div className="model-row" role="listitem">
       <span
@@ -214,14 +237,25 @@ function ModelRow({
           />
         ) : progress ? (
           <>
-            <ProgressBar value={pct} />
-            <span className="model-row-pct">{pct}%</span>
+            <ProgressBar value={pct} indeterminate={indeterminate} />
+            {!indeterminate && <span className="model-row-pct">{pct}%</span>}
             <Button variant="ghost" onClick={onCancel}>
               Cancel
             </Button>
           </>
         ) : active ? (
-          <Badge tone="ok">Active ✓</Badge>
+          <>
+            <Badge tone="ok">Active ✓</Badge>
+            <Button
+              variant="icon"
+              aria-label="Delete"
+              disabled
+              title="Select another model first"
+              onClick={() => {}}
+            >
+              🗑
+            </Button>
+          </>
         ) : model.downloaded ? (
           <>
             <Button variant="secondary" onClick={onUse}>
