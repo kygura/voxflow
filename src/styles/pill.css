@@ -1,0 +1,221 @@
+/* DESIGN.md §2 — the pill overlay */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  margin: 0;
+  overflow: hidden;
+  font-family: var(--font-sans);
+  user-select: none;
+}
+
+#root {
+  width: 100%;
+  height: 100%;
+}
+
+.pill-root {
+  width: 360px;
+  height: 104px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pill-root--hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.pill-body {
+  width: 300px;
+  height: 56px;
+  border-radius: var(--r-pill);
+  background: var(--pill-bg);
+  box-shadow: var(--sh-pill);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 0 12px 0 16px;
+  cursor: default;
+  opacity: 0;
+  transform: translateY(8px);
+  animation: pill-in var(--dur-base) var(--ease-out) forwards;
+}
+
+.pill-root--hidden .pill-body {
+  animation: pill-out var(--dur-base) var(--ease-in) forwards;
+}
+
+@keyframes pill-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pill-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+.pill-body--recording {
+  cursor: pointer;
+}
+
+.pill-glyph {
+  width: 10px;
+  height: 10px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: var(--ok);
+}
+
+.pill-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--rec);
+  box-shadow: 0 0 0 6px var(--rec-soft);
+}
+
+.pill-dot.is-pulsing {
+  animation: pill-pulse 1.6s var(--ease-std) infinite;
+}
+
+@keyframes pill-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 4px var(--rec-soft);
+  }
+  50% {
+    box-shadow: 0 0 0 8px var(--rec-soft);
+  }
+}
+
+.pill-spinner {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1px solid var(--accent);
+  border-top-color: transparent;
+  animation: pill-spin 0.9s linear infinite;
+}
+
+@keyframes pill-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.pill-glyph--error {
+  color: var(--err);
+}
+
+.pill-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+}
+
+.pill-status-text {
+  font-size: var(--fs-md);
+  font-weight: 500;
+  color: var(--text-0);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pill-status-text--error {
+  color: var(--text-0);
+}
+
+.pill-transcribing-text {
+  font-size: var(--fs-md);
+  font-weight: 500;
+  background: linear-gradient(90deg, var(--text-0) 0%, var(--accent) 50%, var(--text-0) 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: pill-shimmer 1.4s linear infinite;
+}
+
+@keyframes pill-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.waveform {
+  width: 118px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.waveform-bar {
+  width: 3px;
+  height: 4px;
+  border-radius: var(--r-sm);
+  background: var(--rec);
+  transition: height 60ms linear;
+}
+
+.waveform.is-reduced-motion .waveform-bar {
+  transition: none;
+}
+
+.pill-hint {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--text-1);
+  white-space: nowrap;
+}
+
+.pill-cancel {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--text-1);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pill-cancel:hover {
+  background: var(--bg-3);
+  color: var(--text-0);
+}
