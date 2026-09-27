@@ -133,9 +133,16 @@ fn open_stream(name: Option<&str>, on_level: Box<dyn Fn(f32) + Send>) -> Result<
     };
     let cfg = config.config();
     let stream = match config.sample_format() {
-        cpal::SampleFormat::F32 => build::<f32>(&device, cfg, sink),
+        cpal::SampleFormat::I8 => build::<i8>(&device, cfg, sink),
         cpal::SampleFormat::I16 => build::<i16>(&device, cfg, sink),
+        cpal::SampleFormat::I32 => build::<i32>(&device, cfg, sink),
+        cpal::SampleFormat::I64 => build::<i64>(&device, cfg, sink),
+        cpal::SampleFormat::U8 => build::<u8>(&device, cfg, sink),
         cpal::SampleFormat::U16 => build::<u16>(&device, cfg, sink),
+        cpal::SampleFormat::U32 => build::<u32>(&device, cfg, sink),
+        cpal::SampleFormat::U64 => build::<u64>(&device, cfg, sink),
+        cpal::SampleFormat::F32 => build::<f32>(&device, cfg, sink),
+        cpal::SampleFormat::F64 => build::<f64>(&device, cfg, sink),
         f => return Err(anyhow!("unsupported microphone sample format {f:?}")),
     }?;
     stream.play().context("failed to start microphone")?;

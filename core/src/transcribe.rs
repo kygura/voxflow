@@ -115,11 +115,14 @@ pub mod remote {
         if !language.is_empty() && language != "auto" {
             form = form.text("language", language.to_owned());
         }
+        let key = api_key.map(str::trim).filter(|k| !k.is_empty());
+        if key.is_some() && !key_transport_ok(&url) {
+            bail!("API key is only sent over https (or localhost)");
+        }
         let client = reqwest::blocking::Client::builder()
             .timeout(Duration::from_secs(60))
             .build()?;
         let mut req = client.post(&url).multipart(form);
-        let key = api_key.map(str::trim).filter(|k| !k.is_empty());
         if let Some(key) = key {
             req = req.bearer_auth(key);
         }
@@ -133,15 +136,33 @@ pub mod remote {
                 .as_ref()
                 .and_then(|j| j["error"]["message"].as_str().map(str::to_owned))
                 .unwrap_or(body);
-            let mut msg: String = msg.trim().chars().take(300).collect();
-            if let Some(key) = key {
-                msg = msg.replace(key, "***"); // in case the server echoes it back
-            }
+            let msg = match key {
+                Some(key) => msg.replace(key, "***"), // in case the server echoes it back
+                None => msg,
+            };
+            let msg: String = msg.trim().chars().take(300).collect();
             bail!("server returned {status}: {msg}");
         }
         match json.as_ref().and_then(|j| j["text"].as_str()) {
             Some(text) => Ok(text.trim().to_owned()),
             None => bail!("server response has no \"text\" field"),
+        }
+    }
+
+    /// https, or plain http to a loopback host. LAN http servers are fine, just not with a key.
+    fn key_transport_ok(url: &str) -> bool {
+        let Ok(url) = reqwest::Url::parse(url) else { return false };
+        let host = url.host_str().unwrap_or("");
+        match url.scheme() {
+            "https" => true,
+            "http" => {
+                host.eq_ignore_ascii_case("localhost")
+                    || host
+                        .trim_matches(['[', ']'])
+                        .parse::<std::net::IpAddr>()
+                        .is_ok_and(|ip| ip.is_loopback())
+            }
+            _ => false,
         }
     }
 
@@ -235,6 +256,29 @@ pub mod remote {
                 .unwrap()
                 .to_ascii_lowercase()
                 .contains("authorization:"));
+        }
+
+        #[test]
+        fn key_never_sent_over_plain_http_to_non_loopback() {
+            for base in ["http://192.0.2.1:9/v1", "http://example.invalid/v1"] {
+                let err = transcribe(&cfg(base.into()), Some("sk-x"), &[0.0; 1600], "en").unwrap_err();
+                assert_eq!(err.to_string(), "API key is only sent over https (or localhost)");
+            }
+            assert!(key_transport_ok("http://localhost:8000/v1"));
+            assert!(key_transport_ok("http://127.8.0.1/v1"));
+            assert!(key_transport_ok("http://[::1]:8000/v1"));
+            assert!(key_transport_ok("https://api.openai.com/v1"));
+            assert!(!key_transport_ok("http://10.0.0.5:8000/v1"));
+        }
+
+        #[test]
+        fn key_masked_before_truncation() {
+            // Key straddles the 300-char cut: truncating first would leak its prefix.
+            let body = format!(r#"{{"error":{{"message":"{}sk-secret-abcdef"}}}}"#, "x".repeat(295));
+            let (base, h) = mock("401 Unauthorized", &body);
+            let err = transcribe(&cfg(base), Some("sk-secret-abcdef"), &[0.0; 1600], "auto").unwrap_err();
+            h.join().unwrap();
+            assert!(!err.to_string().contains("sk-se"), "{err}");
         }
 
         #[test]

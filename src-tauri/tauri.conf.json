@@ -14,10 +14,10 @@
       {
         "label": "main",
         "title": "VoxFlow",
-        "width": 900,
-        "height": 640,
+        "width": 880,
+        "height": 620,
         "minWidth": 720,
-        "minHeight": 520,
+        "minHeight": 480,
         "visible": false,
         "center": true,
         "create": false

@@ -105,6 +105,10 @@ impl Settings {
             "server URL must be http:// or https://"
         );
         ensure!(
+            url.username().is_empty() && url.password().is_none(),
+            "server URL must not contain a username or password"
+        );
+        ensure!(
             !self.remote.model.trim().is_empty(),
             "server model must not be empty"
         );
@@ -201,12 +205,16 @@ mod tests {
         assert!(bad(|s| s.remote.base_url = "not a url".into()));
         assert!(bad(|s| s.remote.base_url = "ftp://example.com".into()));
         assert!(bad(|s| s.remote.base_url = "file:///etc/passwd".into()));
+        assert!(bad(|s| s.remote.base_url = "https://user:pw@example.com/v1".into()));
+        assert!(bad(|s| s.remote.base_url = "http://user@example.com/v1".into()));
         assert!(bad(|s| s.remote.model = "  ".into()));
         assert!(bad(|s| s.language = "english".into()));
         assert!(bad(|s| s.local_model = "../evil".into()));
         let mut ok = Settings::default();
         ok.remote.base_url = "http://localhost:8000/v1".into();
         ok.language = "de".into();
+        assert!(ok.validate().is_ok());
+        ok.remote.base_url = "http://192.168.1.20:8000/v1".into(); // LAN speaches server
         assert!(ok.validate().is_ok());
     }
 }

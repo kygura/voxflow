@@ -73,8 +73,16 @@ pub enum Input {
     HideWindow(u64),
 }
 
-pub fn esc() -> Shortcut {
-    Shortcut::new(None, Code::Escape)
+/// Esc cancels. Also Esc plus the hotkey's modifiers, so Esc works while a push-to-talk
+/// hotkey is still held (e.g. "CommandOrControl+Shift+Escape").
+fn esc_keys(hotkey: &str) -> Vec<Shortcut> {
+    let mut keys = vec![Shortcut::new(None, Code::Escape)];
+    if let Ok(hk) = hotkey.parse::<Shortcut>() {
+        if !hk.mods.is_empty() {
+            keys.push(Shortcut::new(Some(hk.mods), Code::Escape));
+        }
+    }
+    keys
 }
 
 #[derive(Serialize, Clone)]
@@ -100,7 +108,8 @@ struct Worker {
     hands_free: bool,
     /// Bumped on start and cancel; stale timers and transcriptions carry an old value.
     gen: u64,
-    esc_registered: bool,
+    /// Esc shortcuts currently registered (empty = none).
+    esc_registered: Vec<Shortcut>,
 }
 
 pub fn spawn(app: AppHandle, tx: Sender<Input>, rx: Receiver<Input>) {
@@ -112,7 +121,7 @@ pub fn spawn(app: AppHandle, tx: Sender<Input>, rx: Receiver<Input>) {
         pressed_at: Instant::now(),
         hands_free: false,
         gen: 0,
-        esc_registered: false,
+        esc_registered: Vec::new(),
     };
     thread::Builder::new()
         .name("voxflow-dictation".into())
@@ -230,6 +239,8 @@ impl Worker {
         self.set_esc(false);
         // The stop may have been a key press: pasting while the hotkey's modifiers are still
         // down would send e.g. Ctrl+Shift+V. Wait for the release (bounded).
+        // ponytail: held longer than 1.5 s → we paste anyway and may send a modified Ctrl+V;
+        // poll real modifier state (OS API) if that shows up in practice.
         let t = Instant::now();
         while self.state().hotkey_down.load(Ordering::Relaxed) && t.elapsed() < Duration::from_millis(1500) {
             thread::sleep(Duration::from_millis(20));
@@ -286,14 +297,21 @@ impl Worker {
     }
 
     fn set_esc(&mut self, on: bool) {
-        if on == self.esc_registered {
-            return;
-        }
+        let hotkey = self.settings().hotkey;
         let gs = self.app.global_shortcut();
-        let r = if on { gs.register(esc()) } else { gs.unregister(esc()) };
-        match r {
-            Ok(()) => self.esc_registered = on,
-            Err(e) => eprintln!("voxflow: Esc shortcut: {e}"),
+        if !on {
+            for k in self.esc_registered.drain(..) {
+                if let Err(e) = gs.unregister(k) {
+                    eprintln!("voxflow: Esc shortcut: {e}");
+                }
+            }
+        } else if self.esc_registered.is_empty() {
+            for k in esc_keys(&hotkey) {
+                match gs.register(k) {
+                    Ok(()) => self.esc_registered.push(k),
+                    Err(e) => eprintln!("voxflow: Esc shortcut {k:?}: {e}"),
+                }
+            }
         }
     }
 
@@ -357,6 +375,16 @@ mod tests {
     use Phase::*;
 
     #[test]
+    fn esc_keys_follow_hotkey_modifiers() {
+        let esc = Shortcut::new(None, Code::Escape);
+        assert_eq!(esc_keys("F9"), [esc]);
+        let keys = esc_keys("CommandOrControl+Shift+Space");
+        assert_eq!(keys.len(), 2);
+        assert_eq!(keys[0], esc);
+        assert_eq!(keys[1], "CommandOrControl+Shift+Escape".parse::<Shortcut>().unwrap());
+    }
+
+    #[test]
     fn hotkey_decisions() {
         let short = Duration::from_millis(100);
         let long = Duration::from_millis(500);
@@ -368,6 +396,8 @@ mod tests {
             (Hybrid, Error, false, true, short, Start),
             (Hybrid, Recording, false, false, long, Stop),
             (Hybrid, Recording, false, false, short, HandsFree),
+            (Hybrid, Recording, false, false, HOLD, Stop),
+            (Hybrid, Recording, false, false, HOLD - Duration::from_millis(1), HandsFree),
             (Hybrid, Recording, true, true, short, Stop),
             (Hybrid, Recording, true, false, short, Ignore),
             (Hybrid, Recording, false, true, short, Ignore),

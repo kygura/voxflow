@@ -59,7 +59,7 @@ pub fn save_settings(app: AppHandle, state: State<AppState>, settings: Settings)
     let gs = app.global_shortcut();
     if changed {
         let new: Shortcut = settings.hotkey.parse().map_err(|e| format!("Invalid hotkey {}: {e}", settings.hotkey))?;
-        if new == crate::dictation::esc() {
+        if new.key == tauri_plugin_global_shortcut::Code::Escape {
             return Err("Esc is reserved for cancelling dictation".into());
         }
         let _ = gs.unregister(old.as_str());
@@ -76,6 +76,8 @@ pub fn save_settings(app: AppHandle, state: State<AppState>, settings: Settings)
         return Err(err(e));
     }
     *current = settings;
+    drop(current);
+    let _ = app.emit("settings://changed", ());
     Ok(())
 }
 
@@ -94,11 +96,6 @@ pub fn clear_api_key() -> Res {
         Err(keyring::Error::NoEntry) | Ok(()) => Ok(()),
         Err(e) => Err(err(e)),
     }
-}
-
-#[tauri::command]
-pub fn has_api_key() -> bool {
-    api_key().is_some()
 }
 
 #[tauri::command]
@@ -138,6 +135,9 @@ pub fn cancel_download(state: State<AppState>, name: String) {
 
 #[tauri::command]
 pub fn delete_model(state: State<AppState>, name: String) -> Res {
+    if state.settings.lock().unwrap().local_model == name {
+        return Err("Select another model before deleting the active one".into());
+    }
     models::delete(&state.models_dir, &name).map_err(err)
 }
 

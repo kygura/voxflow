@@ -10,7 +10,7 @@ use std::time::Instant;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent, Wry};
-use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, ShortcutState};
 use voxflow_core::history::History;
 use voxflow_core::settings::{Backend, Settings};
 use voxflow_core::transcribe::LocalEngine;
@@ -185,7 +185,7 @@ pub fn run() {
                     // Runs with the plugin's shortcut lock held: only hand off, never (un)register here.
                     let Some(st) = app.try_state::<AppState>() else { return };
                     let pressed = event.state() == ShortcutState::Pressed;
-                    let input = if *shortcut == dictation::esc() {
+                    let input = if shortcut.key == Code::Escape {
                         if !pressed {
                             return;
                         }
@@ -212,7 +212,6 @@ pub fn run() {
             commands::save_settings,
             commands::set_api_key,
             commands::clear_api_key,
-            commands::has_api_key,
             commands::list_models,
             commands::download_model,
             commands::cancel_download,
