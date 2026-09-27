@@ -10,6 +10,7 @@ import type { DictationStateEvent, DictationStateName } from "./lib/ipc";
 import { forceDictationState } from "./lib/mock";
 import { Waveform } from "./components/Waveform";
 import { applyTheme } from "./lib/theme";
+import { Check, Clipboard, X } from "./components/icons";
 
 const AUTO_HIDE_MS: Partial<Record<string, number>> = {
   "done:pasted": 900,
@@ -136,8 +137,8 @@ function Pill() {
         <span className={`pill-glyph pill-glyph--${state}`} aria-hidden="true">
           {isRecording && <span className={`pill-dot${isPtt ? " is-pulsing" : ""}`} />}
           {isTranscribing && <span className="pill-spinner" />}
-          {isDone && message === "Copied" && "⧉"}
-          {isDone && message !== "Copied" && "✓"}
+          {isDone && message === "Copied" && <Clipboard size={14} />}
+          {isDone && message !== "Copied" && <Check size={14} />}
           {isError && "!"}
         </span>
 
@@ -171,7 +172,7 @@ function Pill() {
               api.cancelDictation();
             }}
           >
-            ×
+            <X size={14} />
           </button>
         )}
       </div>

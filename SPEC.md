@@ -39,7 +39,7 @@ whatever app has focus. Windows is the primary target; Linux (X11) is secondary.
      cached in memory and reused until the model setting changes.
    - **Remote**: OpenAI-compatible `POST {baseUrl}/audio/transcriptions` (multipart: `file`
      WAV, `model`, optional `language`, `response_format=json`), `Authorization: Bearer <key>`
-     when a key is set. Presets: OpenAI (`https://api.openai.com/v1`, `whisper-1` /
+     when a key is set (the key is only sent over https or to localhost). Presets: OpenAI (`https://api.openai.com/v1`, `whisper-1` /
      `gpt-4o-mini-transcribe`), Groq (`https://api.groq.com/openai/v1`,
      `whisper-large-v3-turbo`), Local server (speaches/faster-whisper-server,
      `http://localhost:8000/v1`). Timeout 60 s.
@@ -95,14 +95,14 @@ Unknown/missing fields fall back to defaults (serde `default`); a corrupt file i
 ## IPC surface (src-tauri commands / events)
 
 Commands: `get_settings`, `save_settings(settings)`, `set_api_key(key)`, `clear_api_key`,
-`has_api_key`, `list_models` (catalog + downloaded flag + size), `download_model(name)`,
+`list_models` (catalog + downloaded flag + size), `download_model(name)`,
 `cancel_download(name)`, `delete_model(name)`, `list_input_devices`, `test_remote`,
 `get_history`, `delete_history_entry(id)`, `clear_history`, `copy_text(text)`,
 `start_dictation`, `stop_dictation`, `cancel_dictation`, `get_status`, `open_data_dir`.
 Events: `dictation://state` `{ state: "idle"|"recording"|"transcribing"|"done"|"error",
 message? }`, `dictation://level` `{ level: 0..1 }` (~30 Hz while recording),
 `models://progress` `{ name, downloaded, total }`, `models://done` `{ name, error? }`,
-`history://changed`.
+`history://changed`, `settings://changed` (no payload, after a successful save).
 
 ## Out of scope (v1)
 

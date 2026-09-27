@@ -16,6 +16,7 @@ import {
   useDebouncedCallback,
   useSavedFlash,
 } from "../components/ui";
+import { Check, Trash } from "../components/icons";
 
 type Preset = "openai" | "groq" | "local_server" | "custom";
 const PRESETS: Record<Exclude<Preset, "custom">, { baseUrl: string; model: string }> = {
@@ -245,7 +246,9 @@ function ModelRow({
           </>
         ) : active ? (
           <>
-            <Badge tone="ok">Active ✓</Badge>
+            <Badge tone="ok">
+              Active <Check size={14} />
+            </Badge>
             <Button
               variant="icon"
               aria-label="Delete"
@@ -253,7 +256,7 @@ function ModelRow({
               title="Select another model first"
               onClick={() => {}}
             >
-              🗑
+              <Trash size={16} />
             </Button>
           </>
         ) : model.downloaded ? (
@@ -262,7 +265,7 @@ function ModelRow({
               Use
             </Button>
             <Button variant="icon" aria-label="Delete" onClick={onDeleteRequest}>
-              🗑
+              <Trash size={16} />
             </Button>
           </>
         ) : (
@@ -419,7 +422,9 @@ function ApiKeyField({ hasApiKey }: { hasApiKey: boolean }) {
   if (state === "saved") {
     return (
       <div className="api-key-field">
-        <span className="api-key-saved">•••••••• Saved ✓</span>
+        <span className="api-key-saved">
+          •••••••• Saved <Check size={14} />
+        </span>
         <Button
           variant="secondary"
           onClick={() => {

@@ -47,7 +47,7 @@ bun tauri dev          # Run in development
 bun tauri build        # Build production binaries → target/release/bundle/{nsis,msi}
 ```
 
-**GPU acceleration:** Optionally enable the `vulkan` feature in `core/Cargo.toml` for GPU-accelerated transcription. To build without local Whisper (remote-only), edit `src-tauri/Cargo.toml` to set `voxflow-core = { path = "../core", default-features = false }`.
+**GPU acceleration:** Optional: change the `whisper-rs` line in `core/Cargo.toml` to `whisper-rs = { version = "0.16", optional = true, features = ["vulkan"] }` (requires the Vulkan SDK) for GPU-accelerated transcription. To build without local Whisper (remote-only), edit `src-tauri/Cargo.toml` to set `voxflow-core = { path = "../core", default-features = false }`.
 
 ## Build on Linux (X11)
 
@@ -94,4 +94,4 @@ bun run dev           # Browser preview (mock backend, no Tauri IPC)
 - **Unsigned binaries:** Windows SmartScreen may warn on first run
 - **Wayland:** Global hotkeys do not work; Ctrl+V paste may fail (copy-to-clipboard fallback provided)
 - **Modifier-only hotkeys:** Not supported (e.g., can't use Ctrl+Win with no letter; register shortcuts must include at least one non-modifier key)
-- **Model checksums:** Downloaded models are size-checked only; full SHA256 validation not implemented
+- **Model checksums:** Downloads are pinned to a fixed whisper.cpp HuggingFace commit and verified by size and SHA-256 before use

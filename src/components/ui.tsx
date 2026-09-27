@@ -1,6 +1,7 @@
 // Shared UI primitives from DESIGN.md §7 component inventory.
 import { forwardRef, useEffect, useId, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { Search, X } from "./icons";
 
 export function Sidebar({
   active,
@@ -272,7 +273,7 @@ export const FilterInput = forwardRef<
   return (
     <div className="filter-input">
       <span className="filter-input-icon" aria-hidden="true">
-        ⌕
+        <Search size={14} />
       </span>
       <input
         ref={ref}
@@ -296,7 +297,7 @@ export const FilterInput = forwardRef<
           aria-label="Clear filter"
           onClick={() => onChange("")}
         >
-          ×
+          <X size={14} />
         </button>
       )}
     </div>
@@ -470,7 +471,7 @@ export function Banner({
       </div>
       {onDismiss && (
         <button type="button" className="banner-dismiss" aria-label="Dismiss" onClick={onDismiss}>
-          ×
+          <X size={14} />
         </button>
       )}
     </div>

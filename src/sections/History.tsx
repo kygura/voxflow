@@ -11,6 +11,7 @@ import {
   Skeleton,
   useDebouncedCallback,
 } from "../components/ui";
+import { Check, Clipboard, Trash } from "../components/icons";
 
 export function History({
   focusFilterToken,
@@ -210,7 +211,7 @@ function HistoryRow({
       </div>
       <div className="history-row-actions">
         <Button variant="icon" aria-label="Copy" onClick={onCopy}>
-          {copied ? "✓" : "⧉"}
+          {copied ? <Check size={16} /> : <Clipboard size={16} />}
         </Button>
         <Button
           variant="icon"
@@ -220,7 +221,7 @@ function HistoryRow({
             setTimeout(onDelete, 180);
           }}
         >
-          🗑
+          <Trash size={16} />
         </Button>
       </div>
     </div>
