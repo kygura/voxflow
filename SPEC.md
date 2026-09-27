@@ -119,3 +119,16 @@ Wayland global hotkeys, auto-start at login, auto-update, code signing.
 - `bun run build` (tsc + vite) passes; `bun test` passes for schema tests.
 - README documents Windows prerequisites and `bun install && bun tauri dev` /
   `bun tauri build`. The Windows installer build itself can only be produced on Windows.
+
+## IPC payload shapes (authoritative; Rust serde uses camelCase)
+
+```
+ModelInfo      { name: string, sizeMb: number, englishOnly: boolean, downloaded: boolean }
+HistoryEntry   { id: string, text: string, createdAt: number /* unix ms */, backend: "local"|"remote", model: string, durationMs: number }
+Status         { state: "idle"|"recording"|"transcribing"|"done"|"error", message?: string, lastError?: string, hasApiKey: boolean }
+DictationState event payload = { state, message? }  (message: "Pasted" | "Copied" | error text)
+DownloadProgress { name: string, downloaded: number, total: number }   bytes
+DownloadDone     { name: string, error?: string }   error "cancelled" when cancelled
+test_remote -> Ok(string) on success (e.g. "Connected"), Err(string) on failure
+All command errors are returned as plain strings.
+```
