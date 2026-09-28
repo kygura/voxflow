@@ -5,12 +5,14 @@ import { Banner } from "./components/ui";
 import { Sidebar } from "./components/ui";
 import { General } from "./sections/General";
 import { Transcription } from "./sections/Transcription";
+import { Cleanup } from "./sections/Cleanup";
+import { Playground } from "./sections/Playground";
 import { History } from "./sections/History";
 import { About } from "./sections/About";
 import { applyTheme } from "./lib/theme";
 
-type Section = "general" | "transcription" | "history" | "about";
-const SECTIONS: Section[] = ["general", "transcription", "history", "about"];
+type Section = "general" | "transcription" | "cleanup" | "playground" | "history" | "about";
+const SECTIONS: Section[] = ["general", "transcription", "cleanup", "playground", "history", "about"];
 
 export default function App() {
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -53,6 +55,7 @@ export default function App() {
           message: e.message,
           lastError: e.state === "error" ? e.message : prev?.lastError,
           hasApiKey: prev?.hasApiKey ?? false,
+          hasAiKey: prev?.hasAiKey ?? false,
         }));
         if (e.state === "error") setBannerDismissed(false);
       })
@@ -70,7 +73,7 @@ export default function App() {
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (!e.ctrlKey && !e.metaKey) return;
-      if (["1", "2", "3", "4"].includes(e.key)) {
+      if (["1", "2", "3", "4", "5", "6"].includes(e.key)) {
         e.preventDefault();
         goToSection(SECTIONS[Number(e.key) - 1]);
       } else if (e.key.toLowerCase() === "f") {
@@ -108,12 +111,21 @@ export default function App() {
     }
   };
 
-  const dictationStatus: "idle" | "recording" | "transcribing" =
-    status.state === "recording" || status.state === "transcribing" ? status.state : "idle";
+  const dictationStatus: "idle" | "recording" | "transcribing" | "cleaning" =
+    status.state === "recording" || status.state === "transcribing" || status.state === "cleaning"
+      ? status.state
+      : "idle";
 
   return (
     <div className="app-shell">
-      <Sidebar active={section} onSelect={(s) => goToSection(s as Section)} status={dictationStatus} hotkey={settings.hotkey} />
+      <Sidebar
+        active={section}
+        onSelect={(s) => goToSection(s as Section)}
+        status={dictationStatus}
+        hotkey={settings.hotkey}
+        onTranscribeFile={() => api.transcribeFile()}
+        onPreviewOverlay={() => api.previewOverlay()}
+      />
       <main className="content-column">
         {status.lastError && !bannerDismissed && (
           <Banner
@@ -127,6 +139,10 @@ export default function App() {
         {section === "transcription" && (
           <Transcription settings={settings} onSave={saveSettings} hasApiKey={status.hasApiKey} />
         )}
+        {section === "cleanup" && (
+          <Cleanup settings={settings} onSave={saveSettings} hasAiKey={status.hasAiKey} />
+        )}
+        {section === "playground" && <Playground />}
         {section === "history" && (
           <History
             focusFilterToken={historyFocusFilterToken}

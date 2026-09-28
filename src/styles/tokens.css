@@ -1,75 +1,66 @@
-/* VoxFlow design tokens — DESIGN.md §1 */
+/* VoxFlow design tokens — DESIGN.md v2 §1 */
 
 :root,
 :root[data-theme="dark"] {
-  --bg-0: #151412;
-  --bg-1: #1d1b18;
-  --bg-2: #26231f;
-  --bg-3: #312d27;
-  --text-0: #f2ede4;
-  --text-1: #b3aca0;
-  --text-2: #7a736a;
-  --border: #332f29;
-  --border-strong: #4a443c;
-  --accent: #e2a63a;
-  --accent-text: #1a1408;
-  --accent-soft: rgba(226, 166, 58, 0.14);
-  --rec: #f06a5a;
-  --rec-soft: rgba(240, 106, 90, 0.18);
-  --ok: #6fbf8a;
-  --ok-soft: rgba(111, 191, 138, 0.16);
-  --err: #e5655a;
-  --err-soft: rgba(229, 101, 90, 0.14);
-  --focus: #7cc4ff;
-  --pill-bg: rgba(24, 22, 19, 0.92);
-  --pill-border: rgba(255, 255, 255, 0.1);
-  --sh-1: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --sh-2: 0 8px 24px rgba(0, 0, 0, 0.45);
-  --sh-pill: 0 10px 30px rgba(0, 0, 0, 0.55), 0 0 0 1px var(--pill-border);
+  --bg-0: #0a0a0a;
+  --bg-1: #111111;
+  --bg-2: #1a1a1a;
+  --bg-3: #262626;
+  --text-0: #f5f5f5;
+  --text-1: #a3a3a3;
+  --text-2: #7a7a7a;
+  --line: #2e2e2e;
+  --line-strong: #666666;
+  --accent: #c8f542;
+  --accent-fill: #c8f542;
+  --accent-text: #0a0a0a;
+  --accent-soft: rgba(200, 245, 66, 0.12);
+  --err: #ff5c5c;
+  --err-soft: rgba(255, 92, 92, 0.1);
+  --pill-bg: #0a0a0a;
+  --pill-line: rgba(255, 255, 255, 0.22);
+  --focus: var(--accent);
 }
 
 :root[data-theme="light"] {
-  --bg-0: #f3f0ea;
-  --bg-1: #fbfaf7;
-  --bg-2: #ece8e1;
-  --bg-3: #e0dbd2;
-  --text-0: #1c1a17;
-  --text-1: #5d584f;
-  --text-2: #8c857a;
-  --border: #d9d3c8;
-  --border-strong: #b9b2a5;
-  --accent: #b8741a;
-  --accent-text: #ffffff;
-  --accent-soft: rgba(184, 116, 26, 0.12);
-  --rec: #d64b3b;
-  --rec-soft: rgba(214, 75, 59, 0.14);
-  --ok: #2e8b57;
-  --ok-soft: rgba(46, 139, 87, 0.14);
-  --err: #c0392b;
-  --err-soft: rgba(192, 57, 43, 0.1);
-  --focus: #1a73e8;
-  --pill-bg: rgba(251, 250, 247, 0.94);
-  --pill-border: rgba(0, 0, 0, 0.1);
-  --sh-1: 0 1px 2px rgba(0, 0, 0, 0.08);
-  --sh-2: 0 8px 24px rgba(0, 0, 0, 0.12);
-  --sh-pill: 0 10px 30px rgba(0, 0, 0, 0.18), 0 0 0 1px var(--pill-border);
+  --bg-0: #ffffff;
+  --bg-1: #f5f5f5;
+  --bg-2: #ebebeb;
+  --bg-3: #dedede;
+  --text-0: #0a0a0a;
+  --text-1: #525252;
+  --text-2: #6f6f6f;
+  --line: #d4d4d4;
+  --line-strong: #8a8a8a;
+  --accent: #3e6b00;
+  --accent-fill: #c8f542;
+  --accent-text: #0a0a0a;
+  --accent-soft: rgba(62, 107, 0, 0.1);
+  --err: #c4171c;
+  --err-soft: rgba(196, 23, 28, 0.08);
+  --pill-bg: #ffffff;
+  --pill-line: #0a0a0a;
+  --focus: var(--accent);
 }
 
 :root {
-  --font-sans:
-    "IBM Plex Sans", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
-  --font-mono: "IBM Plex Mono", Consolas, "DejaVu Sans Mono", monospace;
+  --font-sans: "Archivo", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", Consolas, "DejaVu Sans Mono", monospace;
 
-  --fs-xs: 11px;
-  --lh-xs: 16px;
-  --fs-sm: 12.5px;
-  --lh-sm: 18px;
-  --fs-md: 14px;
-  --lh-md: 20px;
-  --fs-lg: 16px;
-  --lh-lg: 22px;
-  --fs-xl: 20px;
-  --lh-xl: 26px;
+  --fs-2xs: 0.625rem;
+  --lh-2xs: 0.75rem;
+  --fs-xs: 0.6875rem;
+  --lh-xs: 1rem;
+  --fs-sm: 0.75rem;
+  --lh-sm: 1rem;
+  --fs-md: 0.8125rem;
+  --lh-md: 1.125rem;
+  --fs-lg: 0.9375rem;
+  --lh-lg: 1.25rem;
+  --fs-xl: 1.375rem;
+  --lh-xl: 1.625rem;
+  --fs-timer: 0.75rem;
+  --lh-timer: 1rem;
 
   --sp-1: 2px;
   --sp-2: 4px;
@@ -80,23 +71,25 @@
   --sp-7: 32px;
   --sp-8: 48px;
 
-  --r-sm: 4px;
-  --r-md: 8px;
-  --r-lg: 12px;
-  --r-pill: 999px;
+  --bw: 1px;
+  --bw-bar: 2px;
+  --bw-focus: 2px;
 
-  --dur-fast: 120ms;
-  --dur-base: 200ms;
-  --dur-slow: 320ms;
+  --r-0: 0;
+  --r-pill: 4px;
+
+  --dur-1: 80ms;
+  --dur-2: 160ms;
+  --dur-3: 240ms;
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
   --ease-in: cubic-bezier(0.4, 0, 1, 1);
-  --ease-std: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-lin: linear;
 }
 
 @media (prefers-reduced-motion: reduce) {
   :root {
-    --dur-fast: 1ms;
-    --dur-base: 1ms;
-    --dur-slow: 1ms;
+    --dur-1: 1ms;
+    --dur-2: 1ms;
+    --dur-3: 1ms;
   }
 }

@@ -13,6 +13,16 @@ import {
 } from "../components/ui";
 import { Check, Clipboard, Trash } from "../components/icons";
 
+function wordCount(s: string): number {
+  return s.trim().split(/\s+/).filter(Boolean).length;
+}
+
+function removedCountLabel(raw: string | undefined, text: string): string | null {
+  if (!raw || raw === text) return null;
+  const n = wordCount(raw) - wordCount(text);
+  return n >= 1 ? `−${n} FILLERS` : "EDITED";
+}
+
 export function History({
   focusFilterToken,
   saveHistoryEnabled,
@@ -31,6 +41,7 @@ export function History({
   const [filter, setFilter] = useState("");
   const [confirmClearAll, setConfirmClearAll] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [rawOpen, setRawOpen] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const debouncedFilter = useDebouncedCallback((v: string) => setFilter(v), 120);
@@ -77,7 +88,7 @@ export function History({
               ref={filterInputRef}
               id="history-filter"
               value={filterInput}
-              placeholder="Filter… (Ctrl+F)"
+              placeholder="Filter  Ctrl+F"
               onChange={(v) => {
                 setFilterInput(v);
                 debouncedFilter(v);
@@ -133,8 +144,10 @@ export function History({
               entry={e}
               query={filter}
               expanded={expanded === e.id}
+              rawOpen={rawOpen === e.id}
               copied={copiedId === e.id}
               onToggleExpand={() => setExpanded((cur) => (cur === e.id ? null : e.id))}
+              onToggleRaw={() => setRawOpen((cur) => (cur === e.id ? null : e.id))}
               onCopy={() => copy(e)}
               onDelete={async () => {
                 await api.deleteHistoryEntry(e.id);
@@ -168,23 +181,28 @@ function HistoryRow({
   entry,
   query,
   expanded,
+  rawOpen,
   copied,
   onToggleExpand,
+  onToggleRaw,
   onCopy,
   onDelete,
 }: {
   entry: HistoryEntry;
   query: string;
   expanded: boolean;
+  rawOpen: boolean;
   copied: boolean;
   onToggleExpand: () => void;
+  onToggleRaw: () => void;
   onCopy: () => void;
   onDelete: () => void;
 }) {
   const [deleting, setDeleting] = useState(false);
+  const removedLabel = removedCountLabel(entry.raw, entry.text);
   return (
     <div
-      className={`history-row${expanded ? " is-expanded" : ""}${deleting ? " is-deleting" : ""}`}
+      className={`history-row${deleting ? " is-deleting" : ""}`}
       role="listitem"
       tabIndex={0}
       onKeyDown={(e) => {
@@ -193,6 +211,8 @@ function HistoryRow({
           onToggleExpand();
         } else if (e.key === "Escape" && expanded) {
           onToggleExpand();
+        } else if (e.key.toLowerCase() === "r" && entry.raw) {
+          onToggleRaw();
         } else if (e.key === "Delete") {
           setDeleting(true);
           setTimeout(onDelete, 180);
@@ -209,21 +229,43 @@ function HistoryRow({
           {relativeTime(entry.createdAt)}
         </span>
       </div>
-      <div className="history-row-actions">
-        <Button variant="icon" aria-label="Copy" onClick={onCopy}>
-          {copied ? <Check size={16} /> : <Clipboard size={16} />}
-        </Button>
-        <Button
-          variant="icon"
-          aria-label="Delete"
-          onClick={() => {
-            setDeleting(true);
-            setTimeout(onDelete, 180);
-          }}
-        >
-          <Trash size={16} />
-        </Button>
+      <div className="history-row-meta">
+        {removedLabel && <span>{removedLabel}</span>}
+        {entry.raw && (
+          <button
+            type="button"
+            className="btn btn--ghost"
+            aria-pressed={rawOpen}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleRaw();
+            }}
+          >
+            RAW
+          </button>
+        )}
+        <div className="history-row-actions">
+          <Button variant="icon" aria-label="Copy" onClick={onCopy}>
+            {copied ? <Check size={16} /> : <Clipboard size={16} />}
+          </Button>
+          <Button
+            variant="icon"
+            aria-label="Delete"
+            onClick={() => {
+              setDeleting(true);
+              setTimeout(onDelete, 180);
+            }}
+          >
+            <Trash size={16} />
+          </Button>
+        </div>
       </div>
+      {rawOpen && entry.raw && (
+        <div className="raw-peek">
+          <span className="raw-peek-eyebrow">Raw</span>
+          {entry.raw}
+        </div>
+      )}
     </div>
   );
 }

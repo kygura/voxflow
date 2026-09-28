@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type { Settings, ModelInfo } from "../lib/ipc";
 import { api, events } from "../lib/api";
 import {
+  ApiKeyField,
   Badge,
   Banner,
   Button,
@@ -246,7 +247,7 @@ function ModelRow({
           </>
         ) : active ? (
           <>
-            <Badge tone="ok">
+            <Badge tone="accent">
               Active <Check size={14} />
             </Badge>
             <Button
@@ -376,7 +377,7 @@ function ServerPanel({
         <Input mono placeholder="whisper-1" value={model} onChange={(e) => onModelChange(e.target.value)} />
       </Field>
       <Field label="API key">
-        <ApiKeyField hasApiKey={hasApiKey} />
+        <ApiKeyField saved={hasApiKey} onSave={(key) => api.setApiKey(key)} onClear={() => api.clearApiKey()} />
       </Field>
       <Field label=" ">
         <div className="test-connection-row">
@@ -396,75 +397,5 @@ function ServerPanel({
         </div>
       </Field>
     </Card>
-  );
-}
-
-function ApiKeyField({ hasApiKey }: { hasApiKey: boolean }) {
-  const [state, setState] = useState<"saved" | "input">(hasApiKey ? "saved" : "input");
-  const [value, setValue] = useState("");
-  const [busy, setBusy] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => setState(hasApiKey ? "saved" : "input"), [hasApiKey]);
-
-  const doSave = async () => {
-    if (!value) return;
-    setBusy(true);
-    try {
-      await api.setApiKey(value);
-      setValue("");
-      setState("saved");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  if (state === "saved") {
-    return (
-      <div className="api-key-field">
-        <span className="api-key-saved">
-          •••••••• Saved <Check size={14} />
-        </span>
-        <Button
-          variant="secondary"
-          onClick={() => {
-            setState("input");
-            requestAnimationFrame(() => inputRef.current?.focus());
-          }}
-        >
-          Replace
-        </Button>
-        <Button
-          variant="ghost"
-          onClick={async () => {
-            await api.clearApiKey();
-            setState("input");
-          }}
-        >
-          Remove
-        </Button>
-        <p className="field-helper">Stored in the system keyring, never in files or logs.</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="api-key-field">
-      <Input
-        ref={inputRef}
-        type="password"
-        placeholder="sk-…"
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") doSave();
-          if (e.key === "Escape" && hasApiKey) setState("saved");
-        }}
-      />
-      <Button variant="primary" disabled={!value} loading={busy} onClick={doSave}>
-        Save
-      </Button>
-      <p className="field-helper">Stored in the system keyring, never in files or logs.</p>
-    </div>
   );
 }

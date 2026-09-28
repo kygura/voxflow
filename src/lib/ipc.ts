@@ -14,6 +14,9 @@ export type Backend = z.infer<typeof BackendSchema>;
 export const ThemeSchema = z.enum(["system", "dark", "light"]);
 export type Theme = z.infer<typeof ThemeSchema>;
 
+export const CleanupModeSchema = z.enum(["off", "basic", "ai"]);
+export type CleanupMode = z.infer<typeof CleanupModeSchema>;
+
 export const SettingsSchema = z.object({
   hotkey: z.string(),
   hotkeyMode: HotkeyModeSchema,
@@ -26,6 +29,8 @@ export const SettingsSchema = z.object({
   restoreClipboard: z.boolean(),
   saveHistory: z.boolean(),
   theme: ThemeSchema,
+  cleanup: CleanupModeSchema,
+  ai: z.object({ baseUrl: z.string(), model: z.string() }),
 });
 export type Settings = z.infer<typeof SettingsSchema>;
 
@@ -41,6 +46,7 @@ export const ModelInfoListSchema = z.array(ModelInfoSchema);
 export const HistoryEntrySchema = z.object({
   id: z.string(),
   text: z.string(),
+  raw: z.string().optional(),
   createdAt: z.number(),
   backend: BackendSchema,
   model: z.string(),
@@ -53,6 +59,7 @@ export const DictationStateNameSchema = z.enum([
   "idle",
   "recording",
   "transcribing",
+  "cleaning",
   "done",
   "error",
 ]);
@@ -63,6 +70,7 @@ export const StatusSchema = z.object({
   message: z.string().optional(),
   lastError: z.string().optional(),
   hasApiKey: z.boolean(),
+  hasAiKey: z.boolean(),
 });
 export type Status = z.infer<typeof StatusSchema>;
 
@@ -71,6 +79,8 @@ export const DictationStateEventSchema = z.object({
   message: z.string().optional(),
   // Recording only: "push_to_talk" while the hotkey is held, "toggle" when hands-free.
   mode: z.enum(["push_to_talk", "toggle"]).optional(),
+  text: z.string().optional(),
+  raw: z.string().optional(),
 });
 export type DictationStateEvent = z.infer<typeof DictationStateEventSchema>;
 
@@ -94,6 +104,13 @@ export type DownloadDone = z.infer<typeof DownloadDoneSchema>;
 
 export const InputDeviceListSchema = z.array(z.string());
 
+export const CleanupPreviewSchema = z.object({
+  basic: z.string(),
+  ai: z.string().optional(),
+  aiError: z.string().optional(),
+});
+export type CleanupPreview = z.infer<typeof CleanupPreviewSchema>;
+
 // --- commands ---------------------------------------------------------
 
 export const ipc = {
@@ -101,6 +118,13 @@ export const ipc = {
   saveSettings: (settings: Settings) => invoke<void>("save_settings", { settings }),
   setApiKey: (key: string) => invoke<void>("set_api_key", { key }),
   clearApiKey: () => invoke<void>("clear_api_key"),
+  setAiKey: (key: string) => invoke<void>("set_ai_key", { key }),
+  clearAiKey: () => invoke<void>("clear_ai_key"),
+  testAi: () => invoke("test_ai").then((v) => z.string().parse(v)),
+  cleanupPreview: (text: string) =>
+    invoke("cleanup_preview", { text }).then((v) => CleanupPreviewSchema.parse(v)),
+  transcribeFile: () => invoke<void>("transcribe_file"),
+  previewOverlay: () => invoke<void>("preview_overlay"),
   listModels: () => invoke("list_models").then((v) => ModelInfoListSchema.parse(v)),
   downloadModel: (name: string) => invoke<void>("download_model", { name }),
   cancelDownload: (name: string) => invoke<void>("cancel_download", { name }),

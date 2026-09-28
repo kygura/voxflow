@@ -1,4 +1,5 @@
-// DESIGN.md §7 — monochrome pill glyphs / icon-buttons. stroke = currentColor, 1.5px.
+// DESIGN.md §7 — monochrome icons. stroke = currentColor, 1.5px, square caps/joins
+// (no rounded strokes anywhere in the brutalist brief).
 // Size per DESIGN: 14px in pill / badge, 16px in icon buttons (pass `size`).
 
 function svgProps(size: number) {
@@ -9,8 +10,8 @@ function svgProps(size: number) {
     fill: "none",
     stroke: "currentColor",
     strokeWidth: 1.5,
-    strokeLinecap: "round" as const,
-    strokeLinejoin: "round" as const,
+    strokeLinecap: "square" as const,
+    strokeLinejoin: "miter" as const,
     "aria-hidden": true,
   };
 }
@@ -84,6 +85,32 @@ export function Search({ size = 14 }: { size?: number }) {
     <svg {...svgProps(size)}>
       <circle cx="11" cy="11" r="7" />
       <path d="M21 21l-4.3-4.3" />
+    </svg>
+  );
+}
+
+export function Play({ size = 14 }: { size?: number }) {
+  return (
+    <svg {...svgProps(size)}>
+      <path d="M6 4l14 8-14 8V4z" />
+    </svg>
+  );
+}
+
+export function File({ size = 14 }: { size?: number }) {
+  return (
+    <svg {...svgProps(size)}>
+      <path d="M6 2h9l5 5v15H6V2z" />
+      <path d="M15 2v5h5" />
+    </svg>
+  );
+}
+
+export function Eye({ size = 14 }: { size?: number }) {
+  return (
+    <svg {...svgProps(size)}>
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" />
+      <circle cx="12" cy="12" r="3" />
     </svg>
   );
 }

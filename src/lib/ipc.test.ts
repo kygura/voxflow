@@ -7,6 +7,7 @@ import {
   DictationStateEventSchema,
   DownloadProgressSchema,
   DownloadDoneSchema,
+  CleanupPreviewSchema,
 } from "./ipc";
 
 const goodSettings = {
@@ -21,6 +22,8 @@ const goodSettings = {
   restoreClipboard: true,
   saveHistory: true,
   theme: "system",
+  cleanup: "basic",
+  ai: { baseUrl: "http://localhost:11434/v1", model: "llama3.2" },
 };
 
 describe("SPEC-shaped payloads", () => {
@@ -58,13 +61,34 @@ describe("SPEC-shaped payloads", () => {
   });
 
   test("Status accepts optional fields missing", () => {
-    expect(StatusSchema.parse({ state: "idle", hasApiKey: false })).toBeTruthy();
-    expect(() => StatusSchema.parse({ state: "bogus", hasApiKey: false })).toThrow();
+    expect(StatusSchema.parse({ state: "idle", hasApiKey: false, hasAiKey: false })).toBeTruthy();
+    expect(() =>
+      StatusSchema.parse({ state: "bogus", hasApiKey: false, hasAiKey: false }),
+    ).toThrow();
   });
 
   test("DictationState event payload", () => {
-    expect(DictationStateEventSchema.parse({ state: "done", message: "Pasted" })).toBeTruthy();
+    expect(
+      DictationStateEventSchema.parse({
+        state: "done",
+        message: "Pasted",
+        text: "So I think we should ship it.",
+        raw: "um so I I think we should ship it",
+      }),
+    ).toBeTruthy();
+    expect(DictationStateEventSchema.parse({ state: "cleaning" })).toBeTruthy();
     expect(() => DictationStateEventSchema.parse({ state: "done", message: 5 })).toThrow();
+  });
+
+  test("CleanupPreview accepts / rejects", () => {
+    expect(CleanupPreviewSchema.parse({ basic: "clean text" })).toBeTruthy();
+    expect(
+      CleanupPreviewSchema.parse({ basic: "clean text", ai: "ai text" }),
+    ).toBeTruthy();
+    expect(
+      CleanupPreviewSchema.parse({ basic: "clean text", aiError: "no key" }),
+    ).toBeTruthy();
+    expect(() => CleanupPreviewSchema.parse({ ai: "only ai" })).toThrow();
   });
 
   test("DownloadProgress / DownloadDone", () => {

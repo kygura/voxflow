@@ -6,12 +6,20 @@ import { CardTitle, KeyCombo, SectionHeader } from "../components/ui";
 const SHORTCUTS: [string, string][] = [
   ["Ctrl Shift Space", "Start / stop dictation (anywhere)"],
   ["Esc", "Cancel while recording or transcribing (anywhere)"],
-  ["Ctrl 1 … Ctrl 4", "Switch section"],
+  ["Ctrl 1 … Ctrl 6", "Switch section"],
   ["Ctrl F", "Filter history"],
   ["Ctrl W", "Hide window to tray"],
   ["Enter", "Expand history row / activate control"],
+  ["R", "Toggle raw peek on focused history row"],
   ["Delete", "Delete focused history row"],
 ];
+
+function cleanupSummary(settings: Settings): string {
+  if (settings.cleanup === "off") return "Off";
+  if (settings.cleanup === "basic") return "Basic";
+  const host = settings.ai.baseUrl.replace(/^https?:\/\//, "");
+  return `AI · ${settings.ai.model || "?"} @ ${host}`;
+}
 
 export function About({ settings, status }: { settings: Settings; status: Status }) {
   const [modelsSummary, setModelsSummary] = useState("Loading…");
@@ -44,6 +52,10 @@ export function About({ settings, status }: { settings: Settings; status: Status
         <div className="about-row">
           <dt>Models</dt>
           <dd className="mono">{modelsSummary}</dd>
+        </div>
+        <div className="about-row">
+          <dt>Cleanup</dt>
+          <dd>{cleanupSummary(settings)}</dd>
         </div>
         <div className="about-row">
           <dt>Last error</dt>

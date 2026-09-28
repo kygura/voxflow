@@ -1,33 +1,43 @@
-// Shared UI primitives from DESIGN.md §7 component inventory.
+// Shared UI primitives from DESIGN.md §5 component inventory.
 import { forwardRef, useEffect, useId, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { Search, X } from "./icons";
+import { File, Play, Search, X } from "./icons";
 
 export function Sidebar({
   active,
   onSelect,
   status,
   hotkey,
+  onTranscribeFile,
+  onPreviewOverlay,
 }: {
   active: string;
   onSelect: (id: string) => void;
-  status: "idle" | "recording" | "transcribing";
+  status: "idle" | "recording" | "transcribing" | "cleaning";
   hotkey: string;
+  onTranscribeFile: () => void;
+  onPreviewOverlay: () => void;
 }) {
-  const items: { id: string; label: string; combo: string }[] = [
-    { id: "general", label: "General", combo: "Ctrl 1" },
-    { id: "transcription", label: "Transcription", combo: "Ctrl 2" },
-    { id: "history", label: "History", combo: "Ctrl 3" },
-    { id: "about", label: "About", combo: "Ctrl 4" },
+  const items: { id: string; label: string }[] = [
+    { id: "general", label: "General" },
+    { id: "transcription", label: "Transcription" },
+    { id: "cleanup", label: "Cleanup" },
+    { id: "playground", label: "Playground" },
+    { id: "history", label: "History" },
+    { id: "about", label: "About" },
   ];
+  const [transcribing, setTranscribing] = useState(false);
+
+  const statusLabel =
+    status === "idle" ? "IDLE" : status === "recording" ? "RECORDING" : status === "cleaning" ? "CLEANING" : "TRANSCRIBING";
+
   return (
     <nav className="sidebar" aria-label="Sections">
       <div className="sidebar-brand">
-        <span className="sidebar-icon" aria-hidden="true" />
-        <span className="wordmark">VoxFlow</span>
+        <span className="wordmark">VOXFLOW</span>
       </div>
       <div className="sidebar-nav" role="list">
-        {items.map((it) => (
+        {items.map((it, i) => (
           <button
             key={it.id}
             role="listitem"
@@ -35,18 +45,39 @@ export function Sidebar({
             onClick={() => onSelect(it.id)}
             aria-current={active === it.id ? "page" : undefined}
           >
-            <span>{it.label}</span>
-            <KeyCombo combo={it.combo} size="xs" />
+            <span className="sidebar-item-index">{i + 1}</span>
+            <span className="sidebar-item-label">{it.label}</span>
           </button>
         ))}
+      </div>
+      <div className="sidebar-tools">
+        <Button
+          variant="secondary"
+          className="sidebar-tool-btn"
+          disabled={transcribing}
+          onClick={() => {
+            setTranscribing(true);
+            Promise.resolve(onTranscribeFile()).finally(() => setTranscribing(false));
+          }}
+        >
+          <File size={14} />
+          {transcribing ? "Transcribing…" : "Transcribe file…"}
+        </Button>
+        <Button
+          variant="secondary"
+          className="sidebar-tool-btn"
+          disabled={status !== "idle"}
+          onClick={onPreviewOverlay}
+        >
+          <Play size={14} />
+          Preview overlay
+        </Button>
       </div>
       <div className="sidebar-footer">
         <span className={`status-dot status-dot--${status}`} aria-hidden="true" />
         <span className="sidebar-footer-text">
-          <span className="sidebar-status-label">
-            {status === "idle" ? "Idle" : status === "recording" ? "Recording" : "Transcribing"}
-          </span>
-          <KeyCombo combo={hotkey} size="md" />
+          <span className="sidebar-status-label mono">{statusLabel}</span>
+          <KeyCombo combo={hotkey} size="xs" />
         </span>
       </div>
     </nav>
@@ -74,11 +105,11 @@ export function SectionHeader({
 }
 
 export function Card({ children }: { children: ReactNode }) {
-  return <div className="card">{children}</div>;
+  return <div className="box">{children}</div>;
 }
 
 export function CardTitle({ children }: { children: ReactNode }) {
-  return <h2 className="card-title">{children}</h2>;
+  return <h2 className="box-eyebrow">{children}</h2>;
 }
 
 export function Field({
@@ -132,7 +163,7 @@ export const Button = forwardRef<
       disabled={rest.disabled || loading}
       {...rest}
     >
-      {loading && <Spinner size={14} />}
+      {loading && <Stepper />}
       {children}
     </button>
   );
@@ -234,7 +265,9 @@ export function Select({
         {children}
       </select>
       <span className="select-chevron" aria-hidden="true">
-        ▾
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <path d="M3 4.5l3 3 3-3" strokeLinecap="square" />
+        </svg>
       </span>
     </div>
   );
@@ -255,6 +288,22 @@ export const Input = forwardRef<
         className ? ` ${className}` : ""
       }`}
       aria-invalid={invalid || undefined}
+      {...rest}
+    />
+  );
+});
+
+export const Textarea = forwardRef<
+  HTMLTextAreaElement,
+  {
+    mono?: boolean;
+  } & React.TextareaHTMLAttributes<HTMLTextAreaElement>
+>(function Textarea({ mono, id, className, ...rest }, ref) {
+  return (
+    <textarea
+      ref={ref}
+      id={id}
+      className={`textarea${mono ? " input--mono" : ""}${className ? ` ${className}` : ""}`}
       {...rest}
     />
   );
@@ -342,7 +391,7 @@ export function Badge({
   tone = "muted",
   children,
 }: {
-  tone?: "accent" | "ok" | "muted";
+  tone?: "accent" | "muted" | "err";
   children: ReactNode;
 }) {
   return <span className={`badge badge--${tone}`}>{children}</span>;
@@ -355,27 +404,50 @@ export function ProgressBar({
   value?: number;
   indeterminate?: boolean;
 }) {
+  if (indeterminate) {
+    return (
+      <div className="progress-bar" role="progressbar">
+        <Sweep width={120} />
+      </div>
+    );
+  }
   return (
     <div
-      className={`progress-bar${indeterminate ? " is-indeterminate" : ""}`}
+      className="progress-bar"
       role="progressbar"
-      aria-valuenow={indeterminate ? undefined : Math.round(value ?? 0)}
+      aria-valuenow={Math.round(value ?? 0)}
       aria-valuemin={0}
       aria-valuemax={100}
     >
-      <div className="progress-bar-fill" style={indeterminate ? undefined : { width: `${value}%` }} />
+      <div className="progress-bar-fill" style={{ width: `${value}%` }} />
     </div>
   );
 }
 
-export function Spinner({ size = 14 }: { size?: number }) {
+/** DESIGN.md §2.6 sweep: a moving accent segment over a track; reduced motion
+ * swaps to a 3-block stepper. Used by the pill (transcribing/cleaning) and
+ * ProgressBar's indeterminate state. */
+export function Sweep({ width = 188 }: { width?: number }) {
   return (
-    <span
-      className="spinner"
-      style={{ width: size, height: size }}
-      role="status"
-      aria-label="Loading"
-    />
+    <div className="sweep" style={{ width, ["--sweep-travel" as string]: `${width - 40}px` }}>
+      <span className="sweep-segment" />
+      <span className="sweep-reduced" aria-hidden="true">
+        <span className="sweep-reduced-block" />
+        <span className="sweep-reduced-block" />
+        <span className="sweep-reduced-block" />
+      </span>
+    </div>
+  );
+}
+
+/** DESIGN.md §5 Stepper — replaces Spinner; three blocks filling in sequence. */
+export function Stepper() {
+  return (
+    <span className="stepper" role="status" aria-label="Loading">
+      <span className="stepper-block" />
+      <span className="stepper-block" />
+      <span className="stepper-block" />
+    </span>
   );
 }
 
@@ -474,6 +546,77 @@ export function Banner({
           <X size={14} />
         </button>
       )}
+    </div>
+  );
+}
+
+/** DESIGN.md §3.4/§3.5 — write-only key field, shared by Transcription and Cleanup. */
+export function ApiKeyField({
+  saved,
+  onSave,
+  onClear,
+}: {
+  saved: boolean;
+  onSave: (key: string) => Promise<void>;
+  onClear: () => Promise<void>;
+}) {
+  const [state, setState] = useState<"saved" | "input">(saved ? "saved" : "input");
+  const [value, setValue] = useState("");
+  const [busy, setBusy] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => setState(saved ? "saved" : "input"), [saved]);
+
+  const doSave = async () => {
+    if (!value) return;
+    setBusy(true);
+    try {
+      await onSave(value);
+      setValue("");
+      setState("saved");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (state === "saved") {
+    return (
+      <div className="api-key-field">
+        <span className="api-key-saved mono">
+          •••••••• SAVED
+        </span>
+        <Button
+          variant="secondary"
+          onClick={() => {
+            setState("input");
+            requestAnimationFrame(() => inputRef.current?.focus());
+          }}
+        >
+          Replace
+        </Button>
+        <Button variant="ghost" onClick={async () => onClear()}>
+          Remove
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="api-key-field">
+      <Input
+        ref={inputRef}
+        type="password"
+        placeholder="sk-…"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") doSave();
+          if (e.key === "Escape" && saved) setState("saved");
+        }}
+      />
+      <Button variant="primary" disabled={!value} loading={busy} onClick={doSave}>
+        Save
+      </Button>
     </div>
   );
 }
