@@ -52,6 +52,35 @@ The pill overlay (bottom-center) shows recording state with a live waveform, tra
 
 Tauri dev with demo flag: `bun tauri dev -- -- --demo`
 
+## Cross-compile from WSL (recommended)
+
+Build `VoxFlow.exe` from WSL/Linux without installing anything on Windows. Uses
+[cargo-xwin](https://github.com/rust-cross/cargo-xwin) (clang-cl + lld-link; the MSVC CRT and
+Windows SDK are downloaded automatically). No sudo needed.
+
+**One-time toolchain setup:**
+```bash
+# LLVM 21 unpacked into ~/.local/xtool (no root)
+mkdir -p ~/.local/xtool/debs && cd ~/.local/xtool/debs
+apt-get download clang-21 lld-21 llvm-21 libclang-cpp21 libllvm21 llvm-21-linker-tools \
+  libclang-common-21-dev libclang-rt-21-dev
+for d in *.deb; do dpkg -x "$d" ~/.local/xtool; done
+cd -
+
+uv tool install ninja
+cargo install --locked cargo-xwin
+rustup target add x86_64-pc-windows-msvc
+./scripts/bootstrap-sysroot.sh   # libclang for bindgen (whisper-rs), also used by Linux builds
+```
+
+**Build** (runs `bun run build`, then cargo-xwin; optional arg copies the exe there):
+```bash
+./scripts/build-windows.sh                              # → target/x86_64-pc-windows-msvc/release/voxflow.exe
+./scripts/build-windows.sh /mnt/c/Users/<you>/Desktop   # also copies VoxFlow.exe (stops a running copy first)
+```
+Override tool locations with `XTOOL=` / `SYSROOT=` if you unpacked them elsewhere. The exe
+needs only the VC++ runtime and WebView2, both present on Windows 11.
+
 ## Build on Windows (native, alternative)
 
 **Prerequisites:**
@@ -86,35 +115,6 @@ sudo apt install cmake clang libclang-dev libasound2-dev libwebkit2gtk-4.1-dev \
 source scripts/linux-dev-env.sh   # Sets PKG_CONFIG_*, LIBCLANG_PATH, etc.
 bun install && bun tauri build
 ```
-
-## Cross-compile from WSL (recommended)
-
-Build `VoxFlow.exe` from WSL/Linux without installing anything on Windows. Uses
-[cargo-xwin](https://github.com/rust-cross/cargo-xwin) (clang-cl + lld-link; the MSVC CRT and
-Windows SDK are downloaded automatically). No sudo needed.
-
-**One-time toolchain setup:**
-```bash
-# LLVM 21 unpacked into ~/.local/xtool (no root)
-mkdir -p ~/.local/xtool/debs && cd ~/.local/xtool/debs
-apt-get download clang-21 lld-21 llvm-21 libclang-cpp21 libllvm21 llvm-21-linker-tools \
-  libclang-common-21-dev libclang-rt-21-dev
-for d in *.deb; do dpkg -x "$d" ~/.local/xtool; done
-cd -
-
-uv tool install ninja
-cargo install --locked cargo-xwin
-rustup target add x86_64-pc-windows-msvc
-./scripts/bootstrap-sysroot.sh   # libclang for bindgen (whisper-rs), also used by Linux builds
-```
-
-**Build** (runs `bun run build`, then cargo-xwin; optional arg copies the exe there):
-```bash
-./scripts/build-windows.sh                              # → target/x86_64-pc-windows-msvc/release/voxflow.exe
-./scripts/build-windows.sh /mnt/c/Users/<you>/Desktop   # also copies VoxFlow.exe (stops a running copy first)
-```
-Override tool locations with `XTOOL=` / `SYSROOT=` if you unpacked them elsewhere. The exe
-needs only the VC++ runtime and WebView2, both present on Windows 11.
 
 ## Development
 
