@@ -150,7 +150,11 @@ export function onDictationState(
 ): Promise<UnlistenFn> {
   return listen("dictation://state", (e) => {
     const parsed = DictationStateEventSchema.safeParse(e.payload);
-    cb(parsed.success ? parsed.data : { state: "idle" });
+    if (!parsed.success) {
+      console.warn("dictation://state rejected", parsed.error, e.payload);
+      return;
+    }
+    cb(parsed.data);
   });
 }
 

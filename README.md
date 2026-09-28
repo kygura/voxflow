@@ -7,10 +7,11 @@ VoxFlow is a desktop voice-dictation app. Press your hotkey anywhere to record s
 - **Global hotkey** (default Ctrl+Shift+Space): hold to record, release to transcribe (push-to-talk); or tap for hands-free mode
 - **Local transcription** via whisper.cpp with cached model contexts
 - **Remote transcription** via OpenAI-compatible APIs (presets for OpenAI, Groq, self-hosted faster-whisper)
+- **Conscious editing** (cleanup modes: off/basic/ai) removes disfluencies (um, uh, eh, este, stutters) and repairs punctuation; AI mode via OpenAI-compatible endpoint with presets (Ollama, LM Studio, OpenAI, Groq, OpenRouter, Anthropic), own keyring key, falls back to basic on any error; history keeps both raw and cleaned text
 - **Automatic paste** into focused apps, with optional clipboard restoration
-- **Live waveform** pill overlay showing recording levels
-- **History** of transcriptions (last 200, searchable)
-- **Settings window** with sections for hotkey, backend, model selection, input device, language, history
+- **Live waveform** pill overlay (brutalist dark capsule, acid-lime accent) showing recording state (listening/transcribing/cleaning/done/error)
+- **History** of transcriptions (last 200, searchable, raw text peek)
+- **Settings window** with sections for hotkey, backend, model selection, input device, language, cleanup, AI endpoint, history, and cleanup playground
 - **OS credential store** for API keys (Windows Credential Manager or Linux Secret Service)
 - **Tray menu** with quick start/stop, copy last transcription
 
@@ -30,6 +31,26 @@ The pill overlay (bottom-center) shows recording state with a live waveform, tra
 - **OpenAI:** `https://api.openai.com/v1`, models `whisper-1`, `gpt-4o-mini-transcribe`
 - **Groq:** `https://api.groq.com/openai/v1`, model `whisper-large-v3-turbo`
 - **Local server:** `http://localhost:8000/v1` (for speaches/faster-whisper-server)
+
+**AI cleanup presets (optional):**
+- **Ollama:** `http://localhost:11434/v1`, model `llama3.2`
+- **LM Studio:** `http://localhost:1234/v1`
+- **OpenAI:** `https://api.openai.com/v1`
+- **Groq:** `https://api.groq.com/openai/v1`
+- **OpenRouter:** `https://openrouter.ai/api/v1`
+- **Anthropic:** `https://api.anthropic.com/v1`
+
+## Testing without a microphone
+
+**Preview overlay** (Settings button): drives the pill through a demo cycle with sample voice levels and text (recording → transcribing → cleaning → done), never touches clipboard or history.
+
+**CLI flag** `--demo`: repeats the demo cycle 5 times with 1.5 s gaps after launch. Aborted by any real dictation.
+
+**Transcribe file…** (Settings button): opens a file picker for wav/mp3/m4a/ogg/flac (max 10 minutes), decodes and transcribes, copies result to clipboard without auto-pasting.
+
+**Cleanup playground** (Settings): paste raw text → see basic and AI cleanup outputs side by side.
+
+Tauri dev with demo flag: `bun tauri dev -- -- --demo`
 
 ## Build on Windows
 
@@ -65,6 +86,15 @@ sudo apt install cmake clang libclang-dev libasound2-dev libwebkit2gtk-4.1-dev \
 source scripts/linux-dev-env.sh   # Sets PKG_CONFIG_*, LIBCLANG_PATH, etc.
 bun install && bun tauri build
 ```
+
+## Build Windows exe from WSL (cross-compile)
+
+After running `bun run build` (tsc + vite frontend), cross-compile the Rust binary:
+```bash
+cargo xwin build --release --target x86_64-pc-windows-msvc -p voxflow --features tauri/custom-protocol
+```
+
+**Requirements:** clang/LLVM toolchain (often installed with cargo-xwin). The resulting binary is in `target/x86_64-pc-windows-msvc/release/voxflow.exe`.
 
 ## Development
 

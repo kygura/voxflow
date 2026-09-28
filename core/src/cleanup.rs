@@ -45,6 +45,8 @@ fn tokenize(text: &str) -> Vec<Tok> {
                 Kind::Close
             } else if chunk.chars().all(|c| "¿¡([{“‘\"'".contains(c)) {
                 Kind::Open
+            } else if chunk.chars().all(|c| ")]}”’".contains(c)) {
+                Kind::Close // spaced "( um )": the closer pairs with its opener
             } else {
                 Kind::Free
             };
@@ -144,13 +146,14 @@ fn detect(toks: &[Tok]) -> Lang {
 }
 
 /// Remove `toks[i..i + n]` plus the punctuation that bracketed it:
-/// "a, um, b" → "a b", "um, b" → "b", "a, um." → "a.". Returns where the removal started.
-fn remove(toks: &mut Vec<Tok>, i: usize, n: usize) -> usize {
+/// "It's, like, huge" → "It's huge", "um, b" → "b", "a, um." → "a.". `filler`: always-noise
+/// word (vs a context phrase). Returns where the removal started.
+fn remove(toks: &mut Vec<Tok>, i: usize, n: usize, filler: bool) -> usize {
     let next = toks.get(i + n);
     let next_delim = next.is_some_and(is_delim);
     let next_end = next.is_none_or(is_terminal);
     let prev_comma = i > 0 && is_comma(&toks[i - 1]);
-    if prev_comma && next_delim && keeps_comma(toks, i - 1, i + n + 1) {
+    if prev_comma && next_delim && keeps_comma(toks, i - 1, i + n + 1, filler) {
         toks.drain(i..i + n + 1); // "Well, um, I think" → "Well, I think"
         return i;
     }
@@ -164,9 +167,13 @@ fn remove(toks: &mut Vec<Tok>, i: usize, n: usize) -> usize {
 }
 
 /// Comma at `c` before a removed filler survives when it closes a one-word segment that is
-/// a discourse marker ("Well,") or a list item ("a, um, b, c"); a mid-clause parenthetical
-/// loses both commas ("It's, like, huge." → "It's huge."). `after` = first token past the filler.
-fn keeps_comma(toks: &[Tok], c: usize, after: usize) -> bool {
+/// a discourse marker ("Well,"), a list item ("a, um, b, c"), or any one-word segment before
+/// a pure filler ("a, um, b"); a context phrase mid-clause loses both commas ("It's, like,
+/// huge." → "It's huge."). Two-word segments keep it only after a greeting ("Hi John, um,
+/// how" → "Hi John, how"), so "I think, uh, we" → "I think we". `after` = first token past
+/// the filler. ponytail: word-count heuristic, no parsing; "It's, um, huge" keeps its comma.
+fn keeps_comma(toks: &[Tok], c: usize, after: usize, filler: bool) -> bool {
+    const GREETINGS: &[&str] = &["hi", "hello", "hey", "thanks", "dear", "hola", "gracias", "buenas"];
     const MARKERS: &[&str] = &[
         "well", "wait", "so", "okay", "ok", "oh", "yes", "yeah", "no", "right", "now", "look",
         "hey", "anyway", "actually", "bueno", "pues", "vale", "mira", "oye", "sí", "bien",
@@ -176,12 +183,21 @@ fn keeps_comma(toks: &[Tok], c: usize, after: usize) -> bool {
     let Some(w) = c.checked_sub(1).and_then(word) else {
         return false;
     };
-    let before = c.checked_sub(2).map(|k| &toks[k]);
-    let one_word = before.is_none_or(|t| t.kind == Kind::Open || is_terminal(t) || is_comma(t));
-    one_word
-        && (before.is_some_and(is_comma)
+    let starts = |k: Option<usize>| {
+        k.map(|k| &toks[k])
+            .is_none_or(|t| t.kind == Kind::Open || is_terminal(t) || is_comma(t))
+    };
+    if starts(c.checked_sub(2)) {
+        let before = c.checked_sub(2).map(|k| &toks[k]);
+        return filler
+            || before.is_some_and(is_comma)
             || MARKERS.contains(&w.text.to_lowercase().as_str())
-            || (word(after).is_some() && toks.get(after + 1).is_some_and(is_comma)))
+            || (word(after).is_some() && toks.get(after + 1).is_some_and(is_comma));
+    }
+    c.checked_sub(2)
+        .and_then(word)
+        .is_some_and(|g| GREETINGS.contains(&g.text.to_lowercase().as_str()))
+        && starts(c.checked_sub(3))
 }
 
 /// Deterministic cleanup (SPEC v2 "basic"). `lang` is the language setting ("auto" or
@@ -201,7 +217,7 @@ pub fn basic(text: &str, lang: &str) -> String {
     'scan: while i < toks.len() {
         if toks[i].kind == Kind::Word {
             if is_filler(&toks[i].text.to_lowercase(), lang) {
-                i = remove(&mut toks, i, 1);
+                i = remove(&mut toks, i, 1, true);
                 continue;
             }
             for phrase in context_phrases(lang) {
@@ -221,7 +237,7 @@ pub fn basic(text: &str, lang: &str) -> String {
                 let parenthetical = (prev_boundary && next.is_some_and(is_delim))
                     || (prev.is_some_and(is_delim) && next.is_none_or(is_terminal));
                 if parenthetical {
-                    i = remove(&mut toks, i, n);
+                    i = remove(&mut toks, i, n, false);
                     continue 'scan;
                 }
             }
@@ -528,6 +544,11 @@ mod tests {
             ("en", "Well, um, I think", "Well, I think"),
             ("en", "Wait, like, like, what?", "Wait, what?"),
             ("en", "a, um, b, uh, c", "A, b, c"),
+            ("en", "a, um, b", "A, b"),
+            ("en", "Hi John, um, how are you", "Hi John, how are you"),
+            ("es", "Hola Ana, eh, ¿cómo estás?", "Hola Ana, ¿cómo estás?"),
+            ("en", "hi ( um ) there", "Hi there"),
+            ("en", "hi [ uh ] there", "Hi there"),
             ("en", "I think... um.", "I think..."),
             ("en", "https://example.com/a?b=1", "https://example.com/a?b=1"),
             ("en", "see https://example.com/a?b=1", "See https://example.com/a?b=1"),

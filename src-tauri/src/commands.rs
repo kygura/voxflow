@@ -218,8 +218,12 @@ pub async fn cleanup_preview(app: AppHandle, text: String) -> Res<CleanupPreview
 
 fn ensure_idle(state: &AppState) -> Res {
     let st = state.status.lock().unwrap();
-    match st.phase {
-        _ if st.demo => Ok(()), // the worker aborts (or restarts) the demo
+    idle_check(st.phase, st.demo)
+}
+
+fn idle_check(phase: Phase, demo: bool) -> Res {
+    match phase {
+        _ if demo => Ok(()), // the worker aborts (or restarts) the demo
         Phase::Recording | Phase::Transcribing | Phase::Cleaning => {
             Err("Busy: finish or cancel the current dictation first".into())
         }
@@ -317,4 +321,25 @@ pub fn open_data_dir(app: AppHandle, state: State<AppState>) -> Res {
     app.opener()
         .open_path(state.data_dir.to_string_lossy(), None::<&str>)
         .map_err(err)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn idle_check_allows_demo_blocks_real_work() {
+        use Phase::*;
+        for (phase, demo, ok) in [
+            (Recording, true, true),
+            (Recording, false, false),
+            (Transcribing, false, false),
+            (Cleaning, false, false),
+            (Idle, false, true),
+            (Done, false, true),
+            (Error, false, true),
+        ] {
+            assert_eq!(idle_check(phase, demo).is_ok(), ok, "{phase:?} demo={demo}");
+        }
+    }
 }

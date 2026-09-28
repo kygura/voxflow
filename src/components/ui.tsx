@@ -436,7 +436,7 @@ export function Sweep({ width }: { width?: number }) {
   // pill's content slot and this component never disagree about the width.
   const style = width
     ? ({ width, ["--sweep-travel" as string]: `${width - 40}px` } as React.CSSProperties)
-    : ({ ["--sweep-travel" as string]: "calc(100% - 40px)" } as React.CSSProperties);
+    : ({ ["--sweep-travel" as string]: "calc(100cqw - 40px)" } as React.CSSProperties);
   return (
     <div className="sweep" style={style}>
 

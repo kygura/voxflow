@@ -60,11 +60,12 @@ enum Previous {
 
 /// Transcripts are pasted into arbitrary apps (terminals included): control chars such as
 /// a newline would act as Enter. Replace them with spaces, collapse whitespace, trim.
-/// Bidi overrides and zero-width chars are dropped so pasted text shows what it is.
+/// Bidi marks/overrides, zero-width/invisible chars and soft hyphens are dropped so pasted
+/// text shows what it is (ZWJ/ZWNJ stay: emoji and several scripts need them).
 pub fn sanitize(text: &str) -> String {
     let text: String = text
         .chars()
-        .filter(|c| !matches!(c, '\u{200B}' | '\u{200E}' | '\u{200F}' | '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}' | '\u{FEFF}'))
+        .filter(|c| !matches!(c, '\u{00AD}' | '\u{061C}' | '\u{200B}' | '\u{200E}' | '\u{200F}' | '\u{202A}'..='\u{202E}' | '\u{2060}' | '\u{2066}'..='\u{2069}' | '\u{FEFF}'))
         .collect();
     text.split(|c: char| c.is_control() || c.is_whitespace())
         .filter(|w| !w.is_empty())
@@ -90,6 +91,7 @@ mod tests {
         assert_eq!(super::sanitize("\n\t "), "");
         assert_eq!(super::sanitize("héllo  wörld"), "héllo wörld");
         assert_eq!(super::sanitize("\u{feff}rm\u{200b} -rf\u{202e} x\u{2066}y\u{2069}\u{200f}"), "rm -rf xy");
+        assert_eq!(super::sanitize("co\u{00ad}op\u{2060} \u{061c}x"), "coop x");
         // ZWNJ/ZWJ are kept: emoji sequences and Indic/Persian scripts need them.
         assert_eq!(super::sanitize("a\u{200c}b\u{200d}c"), "a\u{200c}b\u{200d}c");
     }

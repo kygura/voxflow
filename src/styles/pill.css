@@ -296,6 +296,10 @@ body {
   height: 2px;
   background: var(--line);
   overflow: hidden;
+  /* Container query unit so --sweep-travel's calc() resolves against the
+     track's own width, not the animated 40px segment (WebView2 supports
+     container units). */
+  container-type: inline-size;
 }
 
 .sweep-segment {

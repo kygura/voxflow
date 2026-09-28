@@ -18,7 +18,7 @@ use voxflow_core::history::HistoryEntry;
 use voxflow_core::output::{deliver, Delivered};
 use voxflow_core::cleanup::{self, Cleaned};
 use voxflow_core::settings::{Backend, Cleanup, HotkeyMode, Settings};
-use voxflow_core::{decode, models, transcribe::remote};
+use voxflow_core::{decode, models, transcribe::{remote, LocalEngine}};
 
 #[derive(Serialize, Clone, Copy, PartialEq, Eq, Debug, Default)]
 #[serde(rename_all = "lowercase")]
@@ -99,10 +99,41 @@ fn esc_keys(hotkey: &str) -> Vec<Shortcut> {
     keys
 }
 
+#[derive(Debug)]
 pub struct Outcome {
     raw: String,
     cleaned: Cleaned,
     duration_ms: u64,
+}
+
+#[derive(Debug)]
+enum Step {
+    Idle,
+    Fail(String),
+    Deliver(Outcome),
+}
+
+fn triage(result: Result<Outcome, String>) -> Step {
+    match result {
+        // No speech: nothing to paste or save, silently.
+        Ok(o) if o.raw.is_empty() => Step::Idle,
+        Ok(o) if o.cleaned.text.is_empty() => Step::Fail("Nothing to paste — only filler words".into()),
+        Ok(o) => Step::Deliver(o),
+        Err(e) => Step::Fail(e),
+    }
+}
+
+/// Done message and display time (DESIGN §2.3).
+fn done_message(delivered: Delivered, ai_failed: bool) -> (String, u64) {
+    let (msg, ms) = match delivered {
+        Delivered::Pasted => ("Pasted", 1600),
+        Delivered::Copied => ("Copied", 2000),
+    };
+    if ai_failed {
+        (format!("{msg} · AI cleanup failed, used basic"), 2400)
+    } else {
+        (msg.to_owned(), ms)
+    }
 }
 
 #[derive(Serialize, Clone)]
@@ -246,12 +277,10 @@ impl Worker {
             Input::Transcribed { gen, settings, paste, result }
                 if gen == self.gen && matches!(self.phase, Phase::Transcribing | Phase::Cleaning) =>
             {
-                match result {
-                    // No speech: nothing to paste or save, silently.
-                    Ok(o) if o.raw.is_empty() => self.go_idle(),
-                    Ok(o) if o.cleaned.text.is_empty() => self.fail("Nothing to paste — only filler words".into()),
-                    Ok(o) => self.output(o, &settings, paste),
-                    Err(e) => self.fail(e),
+                match triage(result) {
+                    Step::Idle => self.go_idle(),
+                    Step::Fail(e) => self.fail(e),
+                    Step::Deliver(o) => self.output(o, &settings, paste),
                 }
             }
             Input::File(path) if !active => {
@@ -382,16 +411,10 @@ impl Worker {
             let _ = self.app.emit("history://changed", ());
         }
         *state.last_text.lock().unwrap() = Some(text.clone());
-        // Display times per DESIGN §2.3.
-        let (mut msg, mut ms) = match delivered {
-            Delivered::Pasted => ("Pasted".to_owned(), 1600),
-            Delivered::Copied => ("Copied".to_owned(), 2000),
-        };
-        if let Some(note) = note {
+        if let Some(note) = &note {
             eprintln!("voxflow: AI cleanup failed, used basic: {note}");
-            msg.push_str(" · AI cleanup failed, used basic");
-            ms = 2400;
         }
+        let (msg, ms) = done_message(delivered, note.is_some());
         self.emit_full(Phase::Done, Some(&msg), Some(&text), Some(&raw));
         self.after(ms, Input::Expire(self.gen));
     }
@@ -524,8 +547,16 @@ fn transcribe(state: &AppState, s: &Settings, audio: &[f32]) -> Result<String, S
             if !path.is_file() {
                 return Err(format!("Model {} not downloaded", s.local_model));
             }
-            // Survive a poisoned lock: `process` catches a panic mid-transcription.
-            state.engine.lock().unwrap_or_else(|e| e.into_inner()).transcribe(&path, audio, &s.language)
+            // `process` catches a panic mid-transcription; the engine may be half-updated, so
+            // a poisoned lock gets a fresh engine (the model reloads on next use).
+            let mut engine = state.engine.lock().unwrap_or_else(|e| {
+                eprintln!("voxflow: local engine poisoned by an earlier panic; resetting");
+                state.engine.clear_poison();
+                let mut g = e.into_inner();
+                *g = LocalEngine::new();
+                g
+            });
+            engine.transcribe(&path, audio, &s.language)
         }
         Backend::Remote => remote::transcribe(&s.remote, api_key().as_deref(), audio, &s.language),
     };
@@ -581,6 +612,31 @@ mod tests {
         assert!((0.5..=0.97).contains(&max), "max {max}");
         let quiet = e.iter().filter(|l| **l < 0.06).count();
         assert!((10..=80).contains(&quiet), "quiet frames {quiet}"); // gaps exist but don't dominate
+    }
+
+    #[test]
+    fn transcribed_result_mapping() {
+        let o = |raw: &str, text: &str, note: Option<&str>| {
+            Ok(Outcome {
+                raw: raw.into(),
+                cleaned: Cleaned { text: text.into(), note: note.map(Into::into) },
+                duration_ms: 1,
+            })
+        };
+        assert!(matches!(triage(o("", "", None)), Step::Idle));
+        assert!(matches!(triage(o("um", "", None)), Step::Fail(m) if m == "Nothing to paste — only filler words"));
+        assert!(matches!(triage(o("um hi", "Hi", Some("x"))), Step::Deliver(d) if d.cleaned.text == "Hi"));
+        assert!(matches!(triage(Err("boom".into())), Step::Fail(m) if m == "boom"));
+        #[rustfmt::skip]
+        let table = [
+            (Delivered::Pasted, false, "Pasted", 1600),
+            (Delivered::Copied, false, "Copied", 2000),
+            (Delivered::Pasted, true, "Pasted · AI cleanup failed, used basic", 2400),
+            (Delivered::Copied, true, "Copied · AI cleanup failed, used basic", 2400),
+        ];
+        for (d, ai_failed, msg, ms) in table {
+            assert_eq!(done_message(d, ai_failed), (msg.to_owned(), ms), "{d:?} {ai_failed}");
+        }
     }
 
     #[test]
