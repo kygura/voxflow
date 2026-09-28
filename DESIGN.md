@@ -1,371 +1,477 @@
-# VoxFlow — Design Brief
+# VoxFlow — Design Brief (v2)
 
-Audience: the implementer. Plain CSS + custom properties, no Tailwind, no UI kit. Everything
-here is a decision, not a suggestion; if something is missing, pick the boring option that
-matches the tokens below.
+Audience: the implementer. Plain CSS + custom properties, no Tailwind, no UI kit, icons are
+inline SVG. Everything here is a decision. If something is missing, pick the option with fewer
+pixels, fewer colors and straighter edges.
 
-Identity in one line: **a small piece of studio hardware.** Warm graphite surfaces, a single amber
-"signal" accent, coral for recording, mono type for anything the keyboard touches. Calm at rest,
-alive only while you speak.
+Identity in one line: **a black instrument, one signal color.** Near-black surfaces, near-white
+type, one acid-lime signal, hard 1px lines, square corners, a grotesk for words and a mono for
+anything the machine says (timers, keys, states, models, paths). Nothing glows, nothing is soft,
+nothing is a gradient. Wispr Flow / Aqua Voice pill energy: a small dark slab that appears,
+breathes with your voice, and leaves.
+
+What v2 replaces: the v1 "studio hardware" graphite/amber look (warm neutrals, 8–12px radii,
+blurred shadows, pulsing halos, shimmer text, green success color). None of that survives.
 
 ---
 
-## 1. Visual identity
+## 1. Tokens
 
-### 1.1 Name treatment
+### 1.1 Typography (bundled offline via fontsource)
 
-- Wordmark: `VoxFlow` in IBM Plex Sans 600, letter-spacing `-0.01em`, no icon inside the
-  wordmark. In the sidebar it sits next to the app icon (20px) at 15px size.
-- Never split into "Vox" + "Flow" colors. Never a gradient.
-
-### 1.2 Typography (bundled, offline)
-
-| Role | Family | Weights | Package |
+| Role | Family | Weights | Package (exact) |
 | --- | --- | --- | --- |
-| UI text | IBM Plex Sans | 400, 500, 600 | `@fontsource/ibm-plex-sans` (import 400/500/600 css files only) |
-| Keys, paths, sizes, timestamps, model names | IBM Plex Mono | 400, 500 | `@fontsource/ibm-plex-mono` |
+| UI text, section titles, snippets | **Archivo** | 400, 500, 700 | `@fontsource/archivo` — import `400.css`, `500.css`, `700.css` |
+| Timer, key caps, state labels, model names, URLs, paths, timestamps, raw text | **JetBrains Mono** | 400, 500 | `@fontsource/jetbrains-mono` — import `400.css`, `500.css` |
 
-Fallback stack: `"IBM Plex Sans", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif` and
-`"IBM Plex Mono", Consolas, "DejaVu Sans Mono", monospace`. Import the fontsource CSS in the app
-entry so Vite bundles the woff2 files; no runtime network.
+Remove `@fontsource/ibm-plex-sans` and `@fontsource/ibm-plex-mono` from `package.json`.
+Import the CSS files in both entries (`src/main.tsx` and `src/pill.tsx`); the pill only needs
+Archivo 500 and JetBrains Mono 400/500.
 
-Type scale (px / line-height / weight):
+```
+--font-sans: "Archivo", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+--font-mono: "JetBrains Mono", Consolas, "DejaVu Sans Mono", monospace;
+```
 
-| Token | Size | LH | Weight | Use |
-| --- | --- | --- | --- | --- |
-| `--fs-xs` | 11 | 16 | 500 | badges, key caps, eyebrow labels |
-| `--fs-sm` | 12.5 | 18 | 400 | helper copy, timestamps, table meta |
-| `--fs-md` | 14 | 20 | 400 | body, inputs, buttons, nav |
-| `--fs-lg` | 16 | 22 | 600 | card/field group titles |
-| `--fs-xl` | 20 | 26 | 600 | section header (page title) |
+Mono text always sets `font-variant-numeric: tabular-nums`. State labels and eyebrow labels are
+mono, uppercase, `letter-spacing: 0.08em`. Sans text never uses letter-spacing.
 
-Pill uses `--fs-md` 500 for status text, `--fs-xs` mono for the hint.
+Type scale (px / line-height / weight). Font sizes are written in px in tokens but applied via
+`rem` (root 16px) so OS font scaling works: `--fs-md: 0.8125rem` etc. The px values below are
+the intent.
 
-### 1.3 Color tokens
+| Token | Size | LH | Weight | Family | Use |
+| --- | --- | --- | --- | --- | --- |
+| `--fs-2xs` | 10 | 12 | 500 | mono | key caps, `ESC`, pill counters |
+| `--fs-xs` | 11 | 16 | 500 | mono | state labels (uppercase), eyebrow labels, badges, timestamps |
+| `--fs-sm` | 12 | 16 | 400 | sans or mono | helper copy, meta, raw-text peek (mono) |
+| `--fs-md` | 13 | 18 | 400 | sans | body, inputs, buttons, nav, pill snippet |
+| `--fs-lg` | 15 | 20 | 500 | sans | card titles |
+| `--fs-xl` | 22 | 26 | 700 | sans | section title |
+| `--fs-timer` | 12 | 16 | 500 | mono | pill timer `00:04` |
 
-Dark is the default identity; light is a true equivalent, not an afterthought. `data-theme`
-attribute on `<html>`: `dark` | `light`; `system` resolves via `prefers-color-scheme` in JS and
-sets the attribute (both windows).
+### 1.2 Color
+
+`data-theme` on `<html>`: `dark` | `light` (`system` resolves in JS, both windows, existing
+`applyTheme`). Dark is the identity; light is a real inversion, not a tint.
 
 | Token | Dark | Light | Role |
 | --- | --- | --- | --- |
-| `--bg-0` | `#151412` | `#F3F0EA` | window background |
-| `--bg-1` | `#1D1B18` | `#FBFAF7` | sidebar, cards, inputs at rest |
-| `--bg-2` | `#26231F` | `#ECE8E1` | hover, selected row, segmented track |
-| `--bg-3` | `#312D27` | `#E0DBD2` | active/pressed, key caps |
-| `--text-0` | `#F2EDE4` | `#1C1A17` | primary text |
-| `--text-1` | `#B3ACA0` | `#5D584F` | secondary / helper |
-| `--text-2` | `#7A736A` | `#8C857A` | placeholder, disabled, meta |
-| `--border` | `#332F29` | `#D9D3C8` | hairlines, input borders |
-| `--border-strong` | `#4A443C` | `#B9B2A5` | hover borders, dividers on bg-2 |
-| `--accent` | `#E2A63A` | `#B8741A` | amber signal: primary button, active nav, links |
-| `--accent-text` | `#1A1408` | `#FFFFFF` | text on `--accent` |
-| `--accent-soft` | `rgba(226,166,58,.14)` | `rgba(184,116,26,.12)` | selected-row tint, badges |
-| `--rec` | `#F06A5A` | `#D64B3B` | recording dot, waveform bars, stop hover |
-| `--rec-soft` | `rgba(240,106,90,.18)` | `rgba(214,75,59,.14)` | rec halo |
-| `--ok` | `#6FBF8A` | `#2E8B57` | success, "Pasted", downloaded check |
-| `--err` | `#E5655A` | `#C0392B` | errors, destructive |
-| `--err-soft` | `rgba(229,101,90,.14)` | `rgba(192,57,43,.10)` | error banner bg |
-| `--focus` | `#7CC4FF` | `#1A73E8` | focus ring (cool blue on purpose: never confused with amber/coral) |
-| `--pill-bg` | `rgba(24,22,19,.92)` | `rgba(251,250,247,.94)` | pill surface (blur behind if available) |
-| `--pill-border` | `rgba(255,255,255,.10)` | `rgba(0,0,0,.10)` | pill hairline |
+| `--bg-0` | `#0A0A0A` | `#FFFFFF` | window / pill background |
+| `--bg-1` | `#111111` | `#F5F5F5` | sidebar, boxes, textarea, raw-peek block |
+| `--bg-2` | `#1A1A1A` | `#EBEBEB` | hover row, segmented track, key caps |
+| `--bg-3` | `#262626` | `#DEDEDE` | pressed, disabled fill |
+| `--text-0` | `#F5F5F5` | `#0A0A0A` | primary text, waveform bars, inverted fills |
+| `--text-1` | `#A3A3A3` | `#525252` | secondary / helper |
+| `--text-2` | `#7A7A7A` | `#6F6F6F` | meta, placeholder (still AA) |
+| `--line` | `#2E2E2E` | `#D4D4D4` | hairlines, dividers, input borders at rest |
+| `--line-strong` | `#666666` | `#8A8A8A` | control borders (buttons, inputs hover), pill edge in light |
+| `--accent` | `#C8F542` | `#3E6B00` | the one signal: active nav bar, REC square, `PASTED`, links, focus ring, progress |
+| `--accent-fill` | `#C8F542` | `#C8F542` | filled blocks: primary button, toggle-on track, done square |
+| `--accent-text` | `#0A0A0A` | `#0A0A0A` | text on `--accent-fill` |
+| `--accent-soft` | `rgba(200,245,66,.12)` | `rgba(62,107,0,.10)` | filter-match highlight only |
+| `--err` | `#FF5C5C` | `#C4171C` | errors, danger, ERROR square |
+| `--err-soft` | `rgba(255,92,92,.10)` | `rgba(196,23,28,.08)` | error banner bg |
+| `--pill-bg` | `#0A0A0A` | `#FFFFFF` | pill surface, opaque (no blur, no alpha) |
+| `--pill-line` | `rgba(255,255,255,.22)` | `#0A0A0A` | pill 1px edge |
+| `--focus` | `var(--accent)` | `var(--accent)` | focus ring |
 
-Contrast: `--text-0`/`--bg-0` ≥ 12:1 both themes; `--text-1`/`--bg-1` ≥ 5:1; `--accent-text` on
-`--accent` ≥ 7:1. `--text-2` is decorative-only (never sole carrier of information).
+There is no green, no amber, no coral. Success uses `--accent`. Recording uses `--accent`.
+Waveform bars are `--text-0`. The only other hue is `--err`.
 
-### 1.4 Spacing, radii, shadows
+Contrast (WCAG, computed on the values above):
 
-- Spacing scale (`--sp-*`): 2, 4, 8, 12, 16, 24, 32, 48. Content grid uses 8; inline gaps 4/8/12.
-- Radii: `--r-sm` 4 (key caps, badges), `--r-md` 8 (inputs, buttons, rows), `--r-lg` 12 (cards,
-  banners), `--r-pill` 999.
-- Shadows (dark / light):
-  - `--sh-1` `0 1px 2px rgba(0,0,0,.4)` / `0 1px 2px rgba(0,0,0,.08)` — buttons, inputs focus
-  - `--sh-2` `0 8px 24px rgba(0,0,0,.45)` / `0 8px 24px rgba(0,0,0,.12)` — popovers, confirm dialogs
-  - `--sh-pill` `0 10px 30px rgba(0,0,0,.55), 0 0 0 1px var(--pill-border)` / `0 10px 30px rgba(0,0,0,.18), 0 0 0 1px var(--pill-border)`
+| Pair | Dark | Light | Requirement |
+| --- | --- | --- | --- |
+| `--text-0` on `--bg-0` | 19.4:1 | 19.4:1 | ≥ 7 |
+| `--text-1` on `--bg-0` | 8.0:1 | 7.9:1 | ≥ 4.5 |
+| `--text-1` on `--bg-1` | 7.4:1 | 7.3:1 | ≥ 4.5 |
+| `--text-2` on `--bg-0` | 4.7:1 | 5.0:1 | ≥ 4.5 |
+| `--accent` on `--bg-0` | 15.7:1 | 6.4:1 | ≥ 4.5 |
+| `--accent-text` on `--accent-fill` | 15.7:1 | 15.7:1 | ≥ 4.5 |
+| `--err` on `--bg-0` | 6.5:1 | 6.0:1 | ≥ 4.5 |
+| `--line-strong` on `--bg-0` | 3.5:1 | 3.4:1 | ≥ 3 (non-text) |
+| `--bg-0` text on `--text-0` fill (inverted selected) | 19.4:1 | 19.4:1 | ≥ 7 |
 
-### 1.5 Motion
+`--text-2` is AA at 13px+ in both themes; still never the sole carrier of information.
+
+### 1.3 Spacing, lines, radii
+
+- Spacing (`--sp-1..8`): 2, 4, 8, 12, 16, 24, 32, 48. Grid is 8; inline gaps 4/8/12.
+- Border widths: `--bw: 1px` (everything), `--bw-bar: 2px` (active-nav bar, banner edge,
+  progress track), `--bw-focus: 2px`.
+- Radii: **0** everywhere in the settings window (`--r-0: 0`). The pill body uses `--r-pill: 4px`.
+  Nothing else is rounded: not toggles, not key caps, not badges, not inputs, not the REC square.
+- Shadows: none. No `box-shadow` anywhere except the focus ring implementation if `outline`
+  cannot follow a shape. Depth is expressed with 1px lines and inverted fills.
+
+### 1.4 Motion
 
 | Token | Value | Use |
 | --- | --- | --- |
-| `--dur-fast` | 120ms | hover, focus, toggle knob |
-| `--dur-base` | 200ms | pill show/hide, section switch, banner |
-| `--dur-slow` | 320ms | progress bar width, done-state settle |
-| `--ease-out` | `cubic-bezier(.2,.8,.2,1)` | entrances |
+| `--dur-1` | 80ms | hover/press color, toggle knob |
+| `--dur-2` | 160ms | pill show, pill height change, content swap, section switch |
+| `--dur-3` | 240ms | banner enter, row delete collapse |
+| `--ease-out` | `cubic-bezier(.2,.8,.2,1)` | entrances, growth |
 | `--ease-in` | `cubic-bezier(.4,0,1,1)` | exits |
-| `--ease-std` | `cubic-bezier(.4,0,.2,1)` | everything else |
+| `--ease-lin` | `linear` | sweeps, timers, waveform |
 
-Reduced motion (`prefers-reduced-motion: reduce`): all durations become 1ms, the pill fades only
-(no translate), the waveform still animates (it is information, not decoration) but bars change
-height without transition, the transcribing shimmer becomes a static three-dot "…" that swaps
-opacity every 500ms, and spinners stop rotating (show a static ring at 25% arc).
+`prefers-reduced-motion: reduce`: `--dur-1/2/3` become 1ms; every `translate` is removed
+(opacity only); the transcribing/cleaning sweep becomes a static 3-block stepper that changes
+every 500ms with no tween; the REC square does not blink; the waveform still updates (it is
+information) but without the sub-pixel slide (§2.5). The existing `useReducedMotion` hook in
+`pill.tsx` stays and is passed down.
 
 ---
 
-## 2. The pill overlay (`pill.html`)
+## 2. The pill (`pill.html`, `src/pill.tsx`, `src/styles/pill.css`)
 
 ### 2.1 Window
 
-- Logical size **360 × 104**. Pill body is **300 × 56** centered; the remaining 30px sides / 24px
-  top+bottom are transparent margin for `--sh-pill`.
-- `html, body { background: transparent; margin: 0; overflow: hidden; }` (WebView2 flash fix).
-- Placement: horizontally centered on the primary monitor; bottom edge of the *pill body* 24px
-  above the monitor work area (above the taskbar). If work area is unavailable, 72px above the
-  monitor bottom. Recompute on every show (monitor may change).
-- Window is `transparent / undecorated / always-on-top / skip-taskbar / non-focusable`. It is NOT
-  click-through: clicks arrive without focusing.
-- Cursor over the pill body: `default`; over buttons: `pointer`. User-select none everywhere.
+- Logical size **400 × 112** (was 360 × 104). Update `tauri.conf.json` and the
+  `(360.0 * s, 104.0 * s)` in `src-tauri/src/dictation.rs`.
+- Pill body: width **380**, height **64** (recording, transcribing, cleaning, error) or **92**
+  (done with snippet). Body is horizontally centered and **anchored to the window bottom** with a
+  10px bottom margin, so growth goes upward. Side margins 10px, top margin 10px at 92px height.
+- Position: body bottom edge 24px above the monitor work area → window bottom = work area
+  bottom − 14px. Fallback without work area: window bottom = monitor bottom − 62px. Recompute on
+  every show.
+- Window flags unchanged: transparent, undecorated, always-on-top, skip-taskbar, non-focusable,
+  not click-through.
+- `html, body { background: transparent; margin: 0; overflow: hidden; user-select: none; }`.
 
-### 2.2 Layout
+### 2.2 Anatomy (380 wide, 64 tall)
 
 ```
- ┌──────────────────────────────────────────────────────┐  56px, radius 999
- │ ●  ▁▂▃▅▇▅▃▂▁▂▃▅▆▅▃▂▁▂▃▄▃▂   Esc to cancel        ✕  │
- └──────────────────────────────────────────────────────┘
-   │  │ waveform 118px            │ hint (mono xs)  │ 32px hit
-   16 12                          12                12
+ ┌──────────────────────────────────────────────────────────────────────┐ 1px --pill-line, r=4
+ │ ■  00:04   ▁▂▃▅▇▆▃▂▁▂▃▅▆▇▅▃▂▁▂▃▄▃▂▁▂▃▅▆▅▃▂▁▂▃▄▃▂▁▂▃         [ESC]   │
+ └──────────────────────────────────────────────────────────────────────┘
+  16  8   12          waveform 188 × 32 (flex 1)              12  cap  16
 ```
 
-Left cluster (16px inset): status glyph 10px. Middle: content zone (waveform / spinner / text).
-Right: mono hint text in `--text-1`, then optional 32×32 cancel button (icon 14px "×"), 12px inset.
+Left to right, vertically centered, horizontal padding 16px:
+
+1. **Mark**: 8×8 square, no radius. Color per state.
+2. **Label slot** (fixed 44px wide, mono): the timer while recording; the state word otherwise.
+3. **Content slot** (flex 1, min-width 0, height 32): waveform canvas / sweep bar / text.
+4. **Right slot**: the `ESC` key cap (a `<button>`, 22px tall, 32px hit area via padding), or a
+   mono note in done/error.
+
+Colors: body `--pill-bg`, edge `1px solid --pill-line`, text `--text-0`. Cursor `default` on
+body, `pointer` on the cap and (while recording) on the body.
 
 ### 2.3 States
 
-| State | Glyph | Content zone | Hint | Right button | Auto-hide |
+| State | Mark | Label slot (mono xs uppercase unless noted) | Content slot | Right slot | Shown for |
 | --- | --- | --- | --- | --- | --- |
-| hidden | — | — | — | — | — |
-| recording (push-to-talk, key held) | solid `--rec` dot 10px with `--rec-soft` 6px halo, halo pulses 1.6s | Waveform | `release to stop` | ✕ cancel | no |
-| recording (hands-free / toggle) | same dot, no pulse (steady) | Waveform | `Esc to cancel` | ✕ cancel | no |
-| transcribing | 10px ring spinner in `--accent` (1px stroke, 0.9s linear) | text `Transcribing…` in `--text-0` 500 + shimmer sweep | `Esc to cancel` | ✕ cancel | no |
-| done: pasted | check-circle 14px in `--ok` | `Pasted` | — | — | 900ms |
-| done: copied | clipboard icon 14px in `--ok` | `Copied to clipboard` | — | — | 1400ms |
-| error | alert-circle 14px in `--err` | error text, ≤ 36 chars, one line, ellipsis; `--text-0` | `details in VoxFlow` | — | 3000ms |
+| idle | — | — | — | — | hidden |
+| recording, hands-free (toggle / hybrid tapped) | `--accent` filled, steady | timer `00:04` (`--fs-timer`, `--text-1`, tabular) | Waveform (§2.5) | `ESC` cap | until stop |
+| recording, push-to-talk (key held) | `--accent` filled, blinking: opacity 1 ↔ 0.35, `steps(1)`, 1.0s period (500ms each) | timer | Waveform | `ESC` cap | until release |
+| transcribing | `--accent` 1px outlined square (hollow) | `TRANSCRIBING` in `--text-1` | Sweep (§2.6) | `ESC` cap | until backend |
+| cleaning | same hollow square | `CLEANING` in `--text-1` | Sweep | `ESC` cap | until backend |
+| done: Pasted | `--accent-fill` filled | `PASTED` in `--accent` | row 2: snippet (§2.7) | `−4 FILLERS` / `EDITED` / `RAW` counter (§2.7) | 1600ms |
+| done: Copied | `--accent-fill` filled | `COPIED` in `--accent` | row 2: snippet | same counter | 2000ms |
+| done with AI fallback note | same | same | row 2: snippet | `AI FAILED · BASIC` in `--err` (replaces counter) | 2400ms |
+| error | `--err` filled | `ERROR` in `--err` | message, sans `--fs-md` `--text-0`, one line, ellipsis, max 48 chars | `SEE VOXFLOW` mono xs `--text-2` | 3000ms |
 
-Mode difference is only the hint text and the halo pulse. Hybrid mode: pill opens as
-push-to-talk visuals; when the backend reports the hold turned into a tap (≥350ms not held), the
-hint swaps to `Esc to cancel` and the pulse stops. Backend drives this via `dictation://state`
-plus a `mode` hint field if available; otherwise the pill infers from time-since-press.
+Label slot width is fixed at 44px for the timer; state words are wider, so the label slot is
+`min-width: 44px; width: auto` and the content slot takes what is left.
 
-Recording duration: not shown. Keep the pill quiet.
+Recording mode (`mode` on `dictation://state`): `push_to_talk` → blinking mark; `toggle` or
+absent → steady. Hybrid: opens blinking, and when the backend reports the tap it re-sends the
+state with `mode: "toggle"` and the blink stops. Nothing else changes between modes; there is no
+"release to stop" text (the timer and the blink are the affordance).
 
-### 2.4 Waveform (recording)
+Timer: starts at the first `recording` event, `mm:ss`, updates every 1000ms via `setInterval`
+aligned to the start timestamp (no drift), stops at the first non-recording state. Never shown
+outside recording.
 
-- 24 bars, 3px wide, 2px gap, `--r-sm` on bar ends, `--rec` color, container 118 × 28.
-- Rolling history, newest at the **right**. Every `dictation://level` event (~30 Hz): shift the
-  array left, push the new value. Not mirrored, not symmetric — it reads like tape passing.
-- Smoothing before push: `v = max(level, prev * 0.82)` (instant attack, ~6-frame decay).
-- Height mapping: `h = 4 + 24 * sqrt(clamp(v, 0, 1))` px. Bars are vertically centered. Silence
-  shows a flat row of 4px dots, which is the "listening" affordance.
-- Bars have `transition: height 60ms linear` (none under reduced motion). Rendering via 24 divs
-  is fine; no canvas needed.
-- Older bars fade: opacity from 1.0 at the right to 0.35 at the left (linear across bars).
+Screen reader text (`role="status" aria-live="polite"`, visually hidden span inside the content
+slot): `Recording`, `Transcribing`, `Cleaning up`, `Pasted`, `Copied to clipboard`,
+`Error: <message>`.
 
-Transcribing transition: bars ease to 4px over `--dur-base`, then the content zone crossfades to
-the `Transcribing…` text with a left→right shimmer (`--text-0` → `--accent` → `--text-0`, 1.4s
-loop, background-clip text).
+### 2.4 Copy (exact)
 
-### 2.5 Transitions
+| Where | Copy |
+| --- | --- |
+| Transcribing label | `TRANSCRIBING` |
+| Cleaning label | `CLEANING` |
+| Done labels | `PASTED` / `COPIED` |
+| Removed-count note | `−N FILLERS` (N ≥ 1, U+2212 minus), or `EDITED` when raw differs but N ≤ 0, nothing when raw is absent |
+| AI fallback note | `AI FAILED · BASIC` (shown when `message` contains "AI cleanup failed") |
+| Error label | `ERROR` |
+| Error right note | `SEE VOXFLOW` |
+| Cancel cap | `ESC` |
 
-- hidden → recording: window shown at final position; body animates `opacity 0→1` and
-  `translateY(8px→0)` over `--dur-base --ease-out`.
-- → hidden: `opacity 1→0`, `translateY(0→6px)`, `--dur-base --ease-in`, then hide the window.
-- Between visible states: content zone crossfade 120ms; the pill width stays 300 (no resize
-  animations).
+Everything in the label and right slots is uppercase mono with `letter-spacing: .08em`. The
+snippet and the error message are sentence-case sans, as delivered.
 
-### 2.6 Clicks
+### 2.5 Waveform (recording)
 
-- Click anywhere on the pill body while **recording** = stop (same as hotkey stop).
-- ✕ button = cancel (recording or transcribing). Hover: `--bg-3` circle, icon `--text-0`.
-- Done/error states: clicks ignored.
+**Rendering: one `<canvas>`**, 188 × 32 CSS px (the content slot width; the canvas reads its
+`clientWidth` on mount and on resize), backing store scaled by `devicePixelRatio`, redrawn every
+`requestAnimationFrame` while recording. No DOM bars, no CSS transitions. It replaces
+`src/components/Waveform.tsx` entirely (same file name, new implementation).
 
-### 2.7 Accessibility
+Geometry:
 
-The pill is non-focusable, but the content zone is `role="status" aria-live="polite"` so screen
-readers announce `Recording`, `Transcribing`, `Pasted`, and errors. Never rely on color alone:
-each state has a glyph and text.
+- Bar width **2px**, gap **2px**, pitch 4px → `N = floor((W + 2) / 4)` bars = **47** at 188px.
+- Bar height range **2px (floor) to 32px (full)**, vertically centered. Ends are square.
+- Color `--text-0` (read from `getComputedStyle` once per theme change), full opacity, uniform.
+  No left-to-right fade, no gradients, no glow.
+
+Signal:
+
+- Input: `dictation://level` `{ level }` at ~30 Hz, stored in `levelRef` (already exists).
+- Gain: `v = clamp(level * GAIN, 0, 1)` with `GAIN = 1.4`
+  (`// ponytail: tune GAIN against real mic RMS; 1.4 assumed peak speech ≈ 0.7`).
+- Envelope, updated every rAF (not per event) so it stays smooth between 30 Hz samples:
+  `env += (v - env) * (v > env ? 0.55 : 0.12)`. Attack ≈ 2 frames, release ≈ 8 frames at 60 Hz.
+  Under reduced motion use the same envelope (it is a filter, not an animation).
+- Sample ring: every **33.3ms** of elapsed time (`accumulator` on `performance.now()`), push
+  `env` into a ring buffer of `N` values. Newest is at the **right**; the buffer starts filled
+  with 0 so the pill opens with a flat dotted baseline.
+
+Draw (per rAF):
+
+- Height `h = 2 + 30 * sqrt(sample)`; `y = (32 - h) / 2`.
+- **Tape slide**: the whole row is offset by `-(elapsedSinceLastPush / 33.3) * 4` px so bars
+  travel continuously left at 4px per 33.3ms instead of jumping once per sample. Clip to the
+  canvas (bars leaving on the left are cut, a partial bar enters from the right). Under
+  reduced motion the offset is 0 (bars jump per sample).
+- The rightmost (newest) bar is drawn with the **live `env`** rather than the last pushed sample,
+  so the front of the tape tracks the voice at display rate.
+- Silence: all bars at 2px → a dotted 2×2 rule across the slot. That is the "listening" look;
+  do not add a placeholder.
+- Peaks: `sqrt` mapping already lifts quiet speech; values ≥ 1 clamp to 32px. No peak-hold, no
+  clipping color.
+
+Bookkeeping: cancel the rAF on unmount and when `state` leaves recording; reset `env`, the
+ring and the accumulator on every entry to recording. Theme color is re-read when
+`data-theme` changes (a `MutationObserver` on `<html>` attributes, or re-read on each rAF —
+either is acceptable; the latter is simpler and cheap).
+
+### 2.6 Sweep (transcribing, cleaning)
+
+Content slot shows a 188 × 2 track in `--line` with a **40px `--accent` segment** moving
+left→right over **1100ms linear, infinite** (`transform: translateX(0 → 148px)`), restarting
+hard (no yoyo). Vertically centered in the 32px slot. Reduced motion: replace with three 8×2
+blocks (gap 4) at the left of the track; blocks fill in sequence (1, 2, 3, none, 1 …) every
+500ms via `steps(1)`.
+
+### 2.7 Done row 2 (snippet + counter)
+
+When `state === "done"` and `text` is non-empty the body grows to 92px (`height` transition
+`--dur-2 --ease-out`). Row 1 is the 64px anatomy above (mark, label, empty content, right
+note). Row 2 sits in the top 28px that appeared: padding `0 16px 8px 40px` (left-aligned with
+the label slot), the snippet in sans `--fs-md` `--text-0`, single line, `text-overflow: ellipsis`.
+
+Counter (computed in the pill from the payload, frontend only):
+
+```
+words = (s) => s.trim().split(/\s+/).filter(Boolean).length
+if (!raw || raw === text)         -> no note
+n = words(raw) - words(text)
+n >= 1                            -> `−${n} FILLERS`   (mono xs, --text-1)
+otherwise                         -> `EDITED`         (mono xs, --text-1)
+message includes "AI cleanup failed" -> `AI FAILED · BASIC` (mono xs, --err) instead
+```
+
+When `text` is empty (should not happen, but defensive) the body stays 64px and the content
+slot shows nothing.
+
+### 2.8 Transitions
+
+- hidden → visible: window shown at final position; body `opacity 0→1`, `translateY(6px→0)`,
+  `--dur-2 --ease-out`.
+- visible → hidden: `opacity 1→0`, `translateY(0→4px)`, `--dur-2 --ease-in`, then hide the
+  window (existing `visible` state pattern in `pill.tsx`; keep `AUTO_HIDE_MS` but with the
+  durations from §2.3 and a `done:ai-fallback` key).
+- Between visible states: mark, label and right slot swap instantly (they are text); the
+  content slot crossfades `--dur-2` (old opacity 1→0 over the first 80ms, new 0→1 over the
+  last 80ms, absolute-stacked). Width never changes (380). Height changes only for done row 2.
+- Reduced motion: opacity only, 1ms.
+
+### 2.9 Clicks
+
+- Click on the body while recording → `stopDictation`.
+- `ESC` cap click → `cancelDictation` (recording, transcribing, cleaning). Hover: cap border
+  `--text-0`, text `--text-0`. There is no separate ✕ button; delete `.pill-cancel`.
+- Done / error: clicks ignored.
 
 ---
 
-## 3. Main settings window
+## 3. Settings window (`index.html`, `src/App.tsx`)
 
-### 3.1 Window
+### 3.1 Window and shell
 
-- Default **880 × 620**, min **720 × 480**. Native decorations (see §5). Title: `VoxFlow`.
-- Layout: left **Sidebar** 208px fixed, right content column with 32px padding, content
-  max-width 600px (left-aligned, not centered).
+- Default **920 × 660**, min **760 × 540**. Native decorations (unchanged). Title `VoxFlow`.
+- Shell: sidebar **200px** with `border-right: 1px solid --line`, content column with
+  **32px padding**, content max-width **640px**, left-aligned. Content scrolls; sidebar does not.
 
 ```
-┌────────────┬──────────────────────────────────────────┐
-│ ◉ VoxFlow  │  General                                 │  ← SectionHeader (xl)
-│            │  Dictation hotkey and behaviour.         │  ← text-1 sm
-│ General  ⌃1│ ──────────────────────────────────────── │
-│ Transcr. ⌃2│  [Banner: last error]  (only if present) │
-│ History  ⌃3│                                          │
-│ About    ⌃4│  Field  Field  Field …                   │
-│            │                                          │
-│ ● Idle     │                                          │
-└────────────┴──────────────────────────────────────────┘
+┌──────────────┬────────────────────────────────────────────────┐
+│ VOXFLOW      │  General                                  SAVED │  ← fs-xl 700 / mono note
+│              │  Hotkey and behaviour.                          │  ← fs-sm text-1
+│ 1 General    │ ────────────────────────────────────────────── │  ← 1px --line
+│ 2 Transcript.│  [Banner]                                       │
+│ 3 Cleanup    │  ┌ HOTKEY ──────────────────────────────────┐  │  ← Box with eyebrow
+│ 4 Playground │  │ Dictation hotkey        [Ctrl][Shift][Space]│  │
+│ 5 History    │  │ ─────────────────────────────────────────── │  │
+│ 6 About      │  │ Hotkey mode             [Hybrid|PTT|Toggle] │  │
+│              │  └─────────────────────────────────────────────┘  │
+│ ────────────  │                                                  │
+│ [Transcribe   │                                                  │
+│  file…]       │                                                  │
+│ [Preview      │                                                  │
+│  overlay]     │                                                  │
+│ ────────────  │                                                  │
+│ ■ IDLE        │                                                  │
+│ Ctrl+Shift+Sp │                                                  │
+└──────────────┴────────────────────────────────────────────────┘
 ```
 
-Sidebar: `--bg-1` with right `--border`. Nav rows 36px tall, radius `--r-md`, label `--fs-md`
-500, right-aligned `KeyCombo` (`Ctrl 1`) in `--text-2` shown always (this is the keyboard app;
-we advertise it). Active row: `--accent-soft` bg, `--accent` 3px left bar, label `--text-0`.
-Hover: `--bg-2`. Footer: status dot (`--text-2` idle, `--rec` recording, `--accent` transcribing)
-+ label, plus the current hotkey as `KeyCombo` underneath (`Ctrl Shift Space`).
+**Sidebar** (`--bg-1`):
 
-Content area scrolls independently; sidebar does not.
+- Wordmark: `VOXFLOW` mono `--fs-xs` uppercase `letter-spacing .12em` `--text-0`, 16px inset,
+  48px tall row, `border-bottom: 1px solid --line`. No icon next to it (the app icon lives in the
+  title bar and tray).
+- Nav rows: 36px tall, padding `0 16px`, label sans `--fs-md` 500 `--text-1`; left of the label a
+  mono `--fs-xs` index `1`…`6` in `--text-2` (28px column). Hover: bg `--bg-2`. Active: label
+  `--text-0`, index `--accent`, and a **2px `--accent` bar** on the left edge (`box-shadow:
+  inset 2px 0 0 var(--accent)` is acceptable here; it is a line, not a shadow). No fill.
+- The index doubles as the shortcut hint: `Ctrl+N`. Drop the `Ctrl 1` key-combo on the right.
+- **Tools block** (below nav, above the footer, separated by 1px `--line` top and bottom, 12px
+  padding): two full-width secondary buttons stacked with 8px gap: `Transcribe file…` and
+  `Preview overlay`. `Transcribe file…` calls `transcribe_file`; while it runs the button shows
+  `Transcribing…` disabled. `Preview overlay` calls `preview_overlay` and is disabled while
+  the status is not idle. These live here so they are reachable from every section.
+- **Footer** (16px padding): status line mono `--fs-xs` uppercase: 8×8 square + `IDLE` /
+  `RECORDING` / `TRANSCRIBING` / `CLEANING` (square `--text-2` idle, `--accent` recording,
+  `--accent` outlined for transcribing/cleaning) and under it the current hotkey as `KeyCombo`
+  xs.
 
-### 3.2 Field pattern
+**SectionHeader**: title `--fs-xl` 700 `--text-0` (`tabindex=-1`, focus target), subtitle
+`--fs-sm` `--text-1`, right slot for `SAVED` (mono xs `--accent`, 1.2s, existing
+`useSavedFlash`) or the history filter. `border-bottom: 1px solid --line`, 24px bottom margin.
 
-Every setting is a **Field**: horizontal row, label column 220px (label `--fs-md` 500 `--text-0`,
-helper `--fs-sm` `--text-1` underneath), control on the right, row padding 12px 0, hairline
-`--border` between rows. Fields group into a **Card** (`--bg-1`, `--border`, `--r-lg`, padding
-4px 16px) with an optional **CardTitle** (`--fs-lg`) above.
+### 3.2 Box and Field (replaces Card)
 
-Controls save immediately on change (no Save button). A 1.2s transient `Saved` in `--ok` `--fs-sm`
-appears right of the section header when a save round-trips. Failed save → Banner (error).
+**Box**: `border: 1px solid --line`, radius 0, no fill (`--bg-0`), padding `0 16px`.
+**Eyebrow** (replaces CardTitle): mono `--fs-xs` uppercase `--text-2`, sits **on** the top
+border: `position: relative; top: -8px; background: --bg-0; padding: 0 6px; margin-left: -6px`.
+Keep the React names `Card` / `CardTitle` if renaming churns too much; the CSS classes become
+`.box` / `.box-eyebrow`.
 
-### 3.3 General
+**Field**: horizontal row, label column 220px (label `--fs-md` 500 `--text-0`, helper `--fs-sm`
+`--text-1` under it), control right-aligned, padding `12px 0`, `border-top: 1px solid --line`
+between rows (first row none). Disabled: label `--text-2`, control 50% opacity. Error: message
+under the control in `--err` `--fs-sm`.
 
-| Field | Control | Helper copy |
+Controls save on change; `SAVED` flashes in the header. Failed save → error Banner.
+
+### 3.3 General (unchanged content, new skin)
+
+Boxes `HOTKEY` (hotkey, mode), `INPUT` (microphone, language), `OUTPUT` (paste, restore
+clipboard, save history), `APPEARANCE` (theme). Helper copy unchanged from v1. Theme segmented
+`System` / `Dark` / `Light`.
+
+HotkeyRecorder: 32px-tall box with `1px solid --line-strong`, key caps inside, right text button
+`Change`. Listening: border `--accent`, caps replaced by mono `PRESS KEYS…` in `--text-1`,
+`Change` becomes `Esc to cancel`. Captured: border flashes `--accent` 600ms. Invalid: border
+`--err` + message. Behaviour as v1.
+
+### 3.4 Transcription (unchanged content, new skin)
+
+Segmented `Local` / `Server`. Local: Box `MODELS` with `ModelRow`s (48px, mono name, size mono
+`--text-1`, `EN` badge for `.en` models, status column: `Download` secondary / progress + `61%`
++ `Cancel` ghost / `Use` secondary + trash icon / `ACTIVE` badge). Delete = inline confirm.
+Server: Box `SERVER` with preset Select (`OpenAI`, `Groq`, `Local server`, `Custom`), Base URL
+(mono input), Model (mono input), `ApiKeyField`, `Test connection` + inline result (`CONNECTED
+412 MS` mono `--accent` / `FAILED: 401` mono `--err`).
+
+`ApiKeyField` moves from `Transcription.tsx` into `src/components/ui.tsx` (it is now used by
+Cleanup too) with props `{ saved: boolean; onSave(key): Promise<void>; onClear(): Promise<void> }`.
+
+### 3.5 Cleanup (new, `src/sections/Cleanup.tsx`)
+
+Title `Cleanup`, subtitle `What happens to the transcript before it is pasted.`
+
+Box `MODE`:
+
+| Field | Control | Helper |
 | --- | --- | --- |
-| Dictation hotkey | HotkeyRecorder | `Press the combo you want. Needs at least one non-modifier key.` |
-| Hotkey mode | Segmented: `Hybrid` / `Push to talk` / `Toggle` | Hybrid: `Hold to talk, or tap to start and tap again to stop.` PTT: `Recording stops when you release the keys.` Toggle: `Press once to start, again to stop.` (helper changes with selection) |
-| Microphone | Select: `System default` + device names | `Devices are listed when the app starts. Plug in, then reopen this window.` |
-| Language | Select: `Auto-detect` + list of ~20 common languages `English (en)` … | `Auto-detect works well for local models. Server models may need a fixed language.` |
-| Paste automatically | Toggle | `Types Ctrl+V into the focused app after transcribing. Off: text is only copied.` |
-| Restore clipboard | Toggle (disabled when Paste automatically is off) | `Put your previous clipboard back after pasting.` |
-| Save history | Toggle | `Keep the last 200 transcriptions on this device.` |
-| Theme | Segmented: `System` / `Dark` / `Light` | — |
+| Cleanup | Segmented `Off` / `Basic` / `AI` | Off: `Raw transcript, trimmed.` Basic: `Removes fillers and stutters, fixes spacing and capitalization. Runs locally, instantly.` AI: `Sends the transcript to a chat model to remove disfluencies and apply self-corrections. Falls back to Basic on any failure.` (helper follows selection) |
 
-Card titles: `Hotkey` (first two), `Input` (mic, language), `Output` (paste, restore, history),
-`Appearance` (theme).
-
-### 3.4 HotkeyRecorder (detailed)
-
-Rendered as a 36px-tall button-like box, mono, showing the current combo as **KeyCombo** caps
-(`Ctrl` `Shift` `Space`, each cap `--bg-3`, `--r-sm`, 1px `--border-strong` bottom edge 2px for a
-"key" feel, `--fs-xs` 500). Right side: a `Change` text button.
-
-States:
-
-| State | Visual | Behaviour |
-| --- | --- | --- |
-| idle | caps + `Change` | Click box, `Change`, or Enter/Space when focused → listening |
-| listening | box border `--accent`, 2px `--accent-soft` outer ring; caps replaced by `Press keys…` in `--text-1` italic; `Change` becomes `Esc to cancel` | Captures the first keydown that includes a non-modifier key. Modifier-only keydowns render live as greyed caps (`Ctrl` `Shift` `…`) so the user sees progress. Esc aborts (restores previous combo). Blur aborts. |
-| captured | caps update, border flashes `--ok` for 600ms, helper shows `Saved` | Backend re-registers; on failure → invalid state with backend message |
-| invalid | border `--err`, message under the box in `--err` `--fs-sm`: `Needs a non-modifier key, e.g. Ctrl+Shift+Space.` or backend text (`That combo is already in use.`) | Stays listening for another 5s, then reverts to idle with the old combo |
-
-Caps order: `Ctrl` `Alt` `Shift` `Win` then the key (`Space`, `F9`, `A`…). Display `Win` on
-Windows, `Super` on Linux.
-
-### 3.5 Transcription
-
-Top: Segmented `Local` / `Server` (label `Backend`). Below it, only the active panel.
-
-**Local panel** — Card titled `Models`, helper `Downloaded to <data dir>/models. Larger is
-more accurate and slower.` Then a list of **ModelRow** (no card padding, rows are 52px):
-
-```
- ○  base.en   [English only]   142 MB          [Download]
- ●  base                       142 MB          [Active ✓]
- ○  small     [English only]   466 MB   ▓▓▓▓░░ 61%   [Cancel]
- ○  medium                     1.5 GB          [Use]  [🗑]
-```
-
-- Left: radio-style dot (`--accent` filled when active; `--text-2` hollow when downloaded but not
-  active; hidden when not downloaded).
-- Name in mono `--fs-md` 500. Badge `English only` (`--fs-xs`, `--accent-soft` bg, `--accent`
-  text, `--r-sm`) for `.en` models. Size in mono `--text-1` right-aligned in a 72px column.
-- Status column (right, 200px):
-  - not downloaded → secondary Button `Download`
-  - downloading → ProgressBar (120px, 4px, `--accent` on `--bg-3`) + `61%` mono + ghost `Cancel`
-  - downloaded, not active → secondary `Use` + icon-button trash
-  - active → `Active` badge in `--ok-soft`-like (`rgba(111,191,138,.16)`) with check, no delete
-- Delete: inline confirm replaces the status column: `Delete 466 MB?  [Delete] [Keep]`, Delete is
-  danger variant; Esc = Keep. No modal.
-- Download error → row helper line in `--err`: `Download failed: <short reason>. [Retry]`.
-- If backend is Local and no model is downloaded: row list shows normally plus a **Banner** (info
-  variant, `--accent-soft`): `Pick a model to download. base is a good start.`
-
-**Server panel** — Card `Server`:
+Box `AI PROVIDER` (rendered always; fields disabled when mode ≠ `ai`, so the user can configure
+before switching):
 
 | Field | Control | Notes |
 | --- | --- | --- |
-| Preset | Segmented `OpenAI` / `Groq` / `Local server` / `Custom` | Choosing a preset fills URL + model; editing either field switches Preset to `Custom` |
-| Base URL | Input (mono) placeholder `https://api.openai.com/v1` | validate `http(s)://` on blur; error under field |
-| Model | Input (mono) placeholder `whisper-1` | — |
-| API key | ApiKeyField | see below |
-| — | Button `Test connection` + inline result | result right of the button: spinner `Testing…` → `Connected (412 ms)` in `--ok` or `Failed: 401 Unauthorized` in `--err`, truncated to one line, full text on hover title |
+| Preset | Select: `Ollama`, `LM Studio`, `OpenAI`, `Groq`, `OpenRouter`, `Anthropic`, `Custom` | Selecting fills URL + model (`llama3.2`, `local-model`, `gpt-4o-mini`, `llama-3.1-8b-instant`, `openai/gpt-4o-mini`, `claude-3-5-haiku-latest`); editing either field flips to `Custom`. Six presets is too many for a segmented control, hence Select. |
+| Base URL | Input mono, placeholder `http://localhost:11434/v1` | validate `http(s)://` on blur |
+| Model | Input mono, placeholder `llama3.2` | — |
+| API key | `ApiKeyField` (uses `set_ai_key` / `clear_ai_key`, `hasAiKey`) | helper `Stored in the system keyring. Local servers usually need none.` |
+| — | Button `Test` secondary + inline mono result (`CONNECTED` / `FAILED: <reason>`) | calls `test_ai` |
 
-ApiKeyField states:
-- none: password input placeholder `sk-…`, `Save` primary button (disabled while empty). Enter saves.
-- saved: input replaced by a static box `•••••••• Saved ✓` (`--ok` check), buttons `Replace`
-  (secondary) and `Remove` (ghost, `--err` on hover). `Replace` returns to the input state with
-  focus; Esc returns to saved.
-- helper: `Stored in the system keyring, never in files or logs.`
+### 3.6 Playground (new, `src/sections/Playground.tsx`)
 
-### 3.6 History
+Title `Playground`, subtitle `Paste a raw transcript and compare cleanup outputs.`
 
-Header row: SectionHeader `History` + right-aligned FilterInput (search icon, placeholder
-`Filter… (Ctrl+F)`, 240px, clear-× when non-empty) and ghost `Clear all`.
+Layout, top to bottom:
 
-**HistoryRow** (list, no card, rows separated by hairline, padding 12px 8px, radius `--r-md` on
-hover `--bg-2`):
+1. `Textarea` mono `--fs-sm`, 120px tall, full width, placeholder
+   `um so I I think we should, uh, ship it on on friday`. Below it, right-aligned: mono hint
+   `CTRL+ENTER` key cap + primary Button `Run`. Disabled while empty or running (label `Running…`).
+2. Two columns, 50/50, gap 16px, each a Box with eyebrow `BASIC` / `AI`. Body: sans `--fs-md`
+   `--text-0`, `white-space: pre-wrap`, min-height 96px, padding 12px 0. A small ghost `Copy`
+   icon button at the top-right of each box.
+   - Before the first run both bodies show `—` in `--text-2`.
+   - AI column when `aiError` is set: eyebrow becomes `AI · FAILED` in `--err`, body first line
+     is the error in mono `--fs-sm` `--err`, second line sans `--text-1`: `Basic output would be
+     used.` When cleanup mode is not `ai` and there is no key/URL, the backend still returns
+     `aiError`; render it the same way (no special-casing).
+   - Under each body a mono `--fs-xs` `--text-2` counter: `−N WORDS` / `EDITED` / `UNCHANGED`
+     computed as in §2.7.
 
-```
- The quick brown fox jumped over the lazy dog and kept going for…      2 min ago
-                                                             [Copy] [🗑]  (hover/focus only)
-```
+### 3.7 History
 
-- Text: `--fs-md` `--text-0`, clamp 2 lines, full text on expand (Enter toggles expand; expanded
-  rows show full text in a `--bg-1` block).
-- Timestamp mono `--fs-sm` `--text-2`: `just now`, `4 min ago`, `2 h ago`, `Yesterday 14:02`,
-  `12 Mar 09:41`. Title attribute has the full ISO date.
-- Actions: icon buttons appear on hover or when the row has focus. Copy → button label swaps to
-  `Copied` in `--ok` for 1.2s. Delete → row fades out (`--dur-base`), no confirm.
-- Clear all → inline confirm bar under the header: `Delete all 47 entries? This cannot be undone.
-  [Delete all] [Cancel]`. Delete all is danger. Esc cancels.
-- Filter: case-insensitive substring, applied on input (debounce 120ms), matches highlighted
-  with `--accent-soft` background.
+Header: title `History` + right slot: `FilterInput` (240px, placeholder `Filter  Ctrl+F`, clear
+×) and ghost `Clear all`.
 
-Empty states (icon 32px `--text-2`, title `--fs-lg`, body `--fs-sm` `--text-1`, centered, 64px top):
-- no history: `Nothing yet` / `Press Ctrl+Shift+Space anywhere and start talking.` (uses the real
-  hotkey)
-- filter no match: `No matches` / `Try a shorter word.`
-- history disabled: `History is off` / `Turn on "Save history" in General to keep transcriptions.`
-  with a link-button to General.
-
-Loading: 4 skeleton rows (`--bg-2` blocks, 60%/40% widths, shimmer 1.2s) for the first load only.
-
-### 3.7 About
-
-Card-less, two-column definition list (`--text-1` label 160px, value `--text-0`, mono for values):
-
-- `Version` `0.1.0`
-- `Data folder` `C:\Users\…\voxflow` + ghost `Open folder`
-- `Models` `3 downloaded · 1.9 GB`
-- `Last error` full message of the most recent error, mono, wrap, or `None` — this is the
-  "details in VoxFlow" landing spot
-
-Then CardTitle `Shortcuts` with a two-column key table (KeyCombo caps left, description right):
+`HistoryRow` (list, hairline dividers, padding `12px 8px`, hover `--bg-2`, focus ring inside):
 
 ```
- Ctrl Shift Space   Start / stop dictation (anywhere)     ← reflects current hotkey
- Esc                Cancel while recording or transcribing (anywhere)
- Ctrl 1 … Ctrl 4    Switch section
- Ctrl F             Filter history
- Ctrl W             Hide window to tray
- Enter              Expand history row / activate control
- Delete             Delete focused history row
+ So I think we should ship it on Friday.                                    2 MIN AGO
+ −4 FILLERS  RAW                                          [Copy] [Delete]   (hover/focus)
 ```
 
-### 3.8 Banner (last error)
+- Line 1: cleaned `text`, sans `--fs-md`, clamp 2 lines; Enter toggles full text.
+- Line 2 (meta row, mono `--fs-xs` `--text-2`): removed-count (`−4 FILLERS` / `EDITED`, only when
+  `raw` exists) and a `RAW` toggle (ghost xs button with `aria-pressed`) that reveals the raw
+  transcript underneath in a `--bg-1` block, `1px solid --line`, mono `--fs-sm` `--text-1`,
+  padding 8px 12px, eyebrow `RAW`. `R` key on a focused row toggles it. Entries without `raw`
+  show no toggle.
+- Timestamp mono `--fs-xs` `--text-2` uppercase: `JUST NOW`, `4 MIN AGO`, `2 H AGO`,
+  `YESTERDAY 14:02`, `12 MAR 09:41`; title = ISO.
+- Actions on hover/focus: `Copy` (swaps to `COPIED` in `--accent` for 1.2s), `Delete` (row
+  collapses `--dur-3`, no confirm). Clear all → `InlineConfirm` under the header.
+- Filter: substring, debounce 120ms, matches highlighted with `--accent-soft` bg (no radius).
+- Empty states unchanged in copy; icon 24px `--text-2`, title `--fs-lg`, body `--fs-sm`.
 
-Sits at the top of the content column, above fields, every section, while the last error is
-unacknowledged. `--err-soft` bg, `--err` left bar 3px, `--r-lg`, padding 12px 16px. Icon
-alert-circle 16px, title `--fs-md` 500 (`Transcription failed`), body `--fs-sm` (short message,
-one line, ellipsis; full in About), right: ghost `Dismiss` (×). Info variant uses
-`--accent-soft` / `--accent`. Enters with `--dur-base` fade+slide 4px; dismiss fades.
+### 3.8 About
+
+Definition list (label mono `--fs-xs` uppercase `--text-2` 160px, value sans/mono `--text-0`):
+`VERSION`, `DATA FOLDER` (+ ghost `Open folder`), `MODELS`, `CLEANUP` (`Basic` / `AI · llama3.2
+@ localhost:11434`), `LAST ERROR` (mono, wrap, or `None`). Then Box `SHORTCUTS` with the key
+table (§4).
+
+### 3.9 Banner
+
+Top of the content column. `border: 1px solid --err`, `border-left-width: 2px`, bg `--err-soft`,
+padding `12px 16px`, icon 16px, title sans `--fs-md` 500, body `--fs-sm` one line ellipsis,
+right ghost `Dismiss`. Info variant: `--accent` border, `--accent-soft` bg. Enter: opacity +
+`translateY(-4px→0)` `--dur-3`. Dismiss: opacity `--dur-2`.
 
 ---
 
@@ -373,115 +479,110 @@ one line, ellipsis; full in About), right: ghost `Dismiss` (×). Info variant us
 
 | Keys | Where | Action |
 | --- | --- | --- |
-| `Ctrl+1` … `Ctrl+4` | window | Go to General / Transcription / History / About; focus moves to the section header (tabindex -1) |
-| `Ctrl+F` | window | Go to History and focus the filter input, selecting its text |
-| `Ctrl+W` | window | Hide to tray (same as close) |
-| `Esc` | filter input | Clear filter; if already empty, blur |
-| `Esc` | HotkeyRecorder listening | Abort capture |
-| `Esc` | inline confirm (delete model / clear all / replace key) | Cancel confirm |
-| `Esc` | expanded history row | Collapse |
-| `Enter` / `Space` | history row | Toggle expand |
-| `Ctrl+C` | focused history row | Copy that entry (shows `Copied`) |
-| `Delete` | focused history row | Delete entry |
-| `↑` / `↓` | history list, model list | Move focus between rows (roving tabindex; Home/End too) |
-| `←` / `→` | Segmented | Change value (radio-group semantics) |
-| `Tab` | everywhere | Native order |
+| `Ctrl+1` … `Ctrl+6` | window | General / Transcription / Cleanup / Playground / History / About; focus the section title. Update `SECTIONS` and the key check in `App.tsx` to `["1".."6"]`. |
+| `Ctrl+F` | window | History + focus filter |
+| `Ctrl+W` | window | Hide to tray |
+| `Ctrl+Enter` | Playground textarea | Run |
+| `Esc` | filter / recorder / inline confirm / expanded row / raw peek | clear / abort / cancel / collapse |
+| `Enter` / `Space` | history row | toggle expand |
+| `R` | focused history row | toggle raw peek |
+| `Ctrl+C` / `Delete` | focused history row | copy / delete |
+| `↑` `↓` `Home` `End` | lists | roving focus |
+| `←` `→` | Segmented | change value |
 
-Focus order per section: sidebar nav (one tab stop, arrow keys move inside) → banner dismiss →
-fields top-to-bottom → in History: filter → Clear all → rows. Lists are single tab stops.
-
-Focus-visible: `outline: 2px solid var(--focus); outline-offset: 2px; border-radius: inherit`.
-Only on `:focus-visible`, never on mouse focus. Rows use `outline-offset: -2px` so the ring stays
-inside the scroll container.
+Focus ring, everywhere, only on `:focus-visible`:
+`outline: 2px solid var(--focus); outline-offset: 2px;` rows and segmented options use
+`outline-offset: -2px`. Never `outline: none` without this replacement.
 
 ---
 
-## 5. Title bar
+## 5. Component inventory
 
-**Native decorations.** Reasons: Win11 snap layouts, Aero shake, drag/resize and the close
-button behave without custom drag regions; Linux WMs vary wildly; this is a tray utility opened
-for a minute, not a brand surface. The window close button hides to tray (spec). Set the
-title-bar theme to follow `data-theme` where Tauri exposes it (`theme` on the window), otherwise
-accept the OS default.
+React name → CSS class (kebab). Sizes are fixed; deviation is drift.
 
----
+| Component | Spec |
+| --- | --- |
+| `Button` | height 32, padding `0 12px`, radius 0, sans `--fs-md` 500, min-width 64. `primary`: bg `--accent-fill`, text `--accent-text`, border 1px `--accent-fill`; hover bg `--text-0` (dark) / stays (light) — simpler: hover `filter: brightness(.92)`; active `.85`. `secondary`: transparent, border 1px `--line-strong`, text `--text-0`; hover border `--text-0`; active bg `--bg-2`. `ghost`: no border, text `--text-1`; hover text `--text-0` bg `--bg-2`. `danger`: transparent, border 1px `--err`, text `--err`; hover bg `--err` text `#FFFFFF`. `icon`: 28×28 ghost. Disabled: 40% opacity, no hover. Loading: 12px stepper (§2.6 reduced variant) replaces the icon. |
+| `Input` / `Textarea` | height 32 (textarea auto), padding `0 10px`, bg `--bg-0`, border 1px `--line`, radius 0, sans `--fs-md`; `.input--mono` uses mono `--fs-sm`. Hover border `--line-strong`; focus border `--text-0` + focus ring; invalid border `--err`; placeholder `--text-2`. |
+| `Segmented` | `role=radiogroup`; options are adjoining 28px-tall buttons with 1px `--line-strong` borders (shared borders collapse via `margin-left: -1px`), sans `--fs-md` 500 `--text-1`, padding `0 12px`. Selected: **inverted** — bg `--text-0`, text `--bg-0`. Hover unselected: bg `--bg-2`. |
+| `Toggle` | `<button role=switch>` 36×20 rectangle, border 1px `--line-strong`, knob 14×14 square inset 2px. Off: knob `--text-1`, track transparent. On: track `--accent-fill`, border `--accent-fill`, knob `--accent-text`. Knob slides 16px in `--dur-1`. |
+| `Select` | native `<select>`, `appearance: none`, same box as Input, chevron 12px inline SVG right 10px. |
+| `FilterInput` | Input with 12px search icon left (padding-left 30) and clear × button right. |
+| `KeyCombo` / key cap | each cap: mono `--fs-2xs` uppercase, padding `2px 6px`, border 1px `--line-strong`, radius 0, bg `--bg-2` (settings) or transparent (pill), `--text-1`; gap 4. Caps order `Ctrl` `Alt` `Shift` `Win/Super` key. |
+| `Badge` | mono `--fs-2xs` uppercase, padding `1px 6px`, border 1px currentColor, radius 0, transparent bg. Tones: `accent` (text `--accent`), `muted` (`--text-2`), `err`. `ACTIVE`, `EN`, `−4 FILLERS`. |
+| `ListRow` (ModelRow, HistoryRow) | min-height 48 / 44, `border-top: 1px solid --line`, hover `--bg-2`, focus ring inset. |
+| `ProgressBar` | 2px track `--line`, fill `--accent`, width transition `--dur-3 linear`; indeterminate = §2.6 sweep at 120px. |
+| `Banner` | §3.9 |
+| `EmptyState` | centered, 64px top margin, icon 24 `--text-2`, title `--fs-lg`, body `--fs-sm` `--text-1`, optional ghost action. |
+| `InlineConfirm` | row: text `--fs-sm` + `danger` + `ghost` buttons; Esc cancels; first button focused on open. |
+| `Skeleton` | `--bg-2` blocks 12px tall, 60%/40%, opacity 1 ↔ .5 `steps(1)` 800ms (no shimmer). |
+| `Stepper` (replaces `Spinner`) | three 4×8 blocks, gap 2, currentColor, fill sequence every 250ms `steps(1)` (500ms under reduced motion). Used in buttons and `Testing…`. |
+| `Pill` | root of `pill.tsx`; states `recording` (`data-mode`), `transcribing`, `cleaning`, `done` (`data-note`), `error`. |
+| `Waveform` | canvas, §2.5. |
+| `Sweep` | §2.6, used by pill and indeterminate progress. |
+| `ApiKeyField` | none / saving / saved (`•••••••• SAVED` mono, `Replace` secondary, `Remove` ghost→err on hover) / replacing / error. |
 
-## 6. Tray and icons
-
-Tray menu (top to bottom):
-
-1. `Open VoxFlow` (bold/default item)
-2. separator
-3. `Start dictation` — becomes `Stop dictation` while recording, `Cancel transcription` while transcribing
-4. `Copy last transcription` — disabled when history is empty
-5. separator
-6. `Quit VoxFlow`
-
-Tray icon: a 16px glyph, monochrome for Windows (white on dark taskbar via template-style
-rendering; ship a light and a dark PNG and pick by system theme). Glyph: **five vertical bars**
-of heights 6/10/14/10/6 px (1.5px wide, rounded ends, 1px gaps) — the same silhouette as the pill
-waveform, centered. Recording variant: same bars in `--rec` coral, plus a 4px filled dot at the
-top-right corner. Transcribing: bars in amber. Swap the tray icon on state change; if theming per
-state is unreliable on a platform, fall back to the idle icon and rely on the menu label.
-
-App icon (SVG, 1024 viewBox, must survive at 16px): rounded square (radius 22%) filled
-`#1D1B18`, a 1px inner hairline `rgba(255,255,255,.08)`, and the five-bar waveform in `#E2A63A`
-amber occupying 56% width and 48% height, centered, bar width 9%, gap 4%, corner radius = bar
-width. No text, no mic silhouette, no gradient. Light-mode variant not needed (icon has its own
-background).
+Transitions only on `background-color, border-color, color, opacity, transform, height, width`.
+Never `transition: all`. Every interactive element ≥ 28×28 hit area, rows ≥ 44px.
 
 ---
 
-## 7. Component inventory
+## 6. File boundaries
 
-Naming is the React component name; CSS class is the kebab form (`.hotkey-recorder`). States
-are the `data-state` / modifier classes to implement.
+| File | Owns |
+| --- | --- |
+| `src/styles/tokens.css` | §1 only: both theme blocks, type scale, spacing, borders, radii, motion, reduced-motion overrides. |
+| `src/styles/pill.css` | §2 only. Classes: `.pill-root`, `.pill-body[data-state][data-mode]`, `.pill-mark`, `.pill-label`, `.pill-content`, `.pill-snippet`, `.pill-note`, `.pill-cap`, `.sweep`, `.stepper`. |
+| `src/styles/app.css` | §3–5 settings window. Rename `.card`→`.box`, `.card-title`→`.box-eyebrow`; add `.tools`, `.playground`, `.playground-columns`, `.history-row-meta`, `.raw-peek`. |
+| `src/pill.tsx` | Pill state machine, timer, auto-hide, done counter (§2.7), snippet. Reads `text`/`raw` from the event. |
+| `src/components/Waveform.tsx` | Canvas waveform (§2.5). Props `{ levelRef, reducedMotion }` unchanged. |
+| `src/components/ui.tsx` | Everything in §5 except Waveform/Pill: add `Textarea`, `Stepper`, `Sweep`, `ApiKeyField` (moved), `Box`/`Eyebrow` (or keep `Card`/`CardTitle` names). |
+| `src/components/icons.tsx` | Inline SVG, 1.5px stroke, square caps and joins (`stroke-linecap: square`). Add `Play`, `File`, `Eye`. |
+| `src/sections/Cleanup.tsx` | §3.5 |
+| `src/sections/Playground.tsx` | §3.6 |
+| `src/sections/History.tsx` | §3.7 (raw peek, counter) |
+| `src/App.tsx` | six sections, `Ctrl+1..6`, sidebar tools wiring (`transcribe_file`, `preview_overlay`). |
+| `src/lib/ipc.ts` | schema additions: `cleanup`, `ai`, `hasAiKey`, `raw?`, state `cleaning`, event `text?`/`raw?`, new commands. |
 
-| Component | Purpose | States / variants |
-| --- | --- | --- |
-| `Sidebar` | nav + wordmark + status footer | items: idle, hover, active, focus-visible; footer status: idle/recording/transcribing |
-| `SectionHeader` | title + subtitle + right slot (`Saved`, filter) | with/without right slot |
-| `Card`, `CardTitle` | grouping | — |
-| `Field` | label + helper + control row | default, disabled (label `--text-2`, control 50% opacity), error (message in `--err`) |
-| `Button` | actions | variants: `primary` (accent bg, accent-text), `secondary` (`--bg-2` bg, `--border`, text-0), `ghost` (transparent, text-1, hover bg-2), `danger` (err bg, white text), `icon` (32×32, ghost). States: hover, active (`--bg-3` / darken 6%), disabled (50% opacity, no hover), loading (spinner 14px replaces icon, label stays). Height 32, padding 0 12, `--r-md`, `--fs-md` 500 |
-| `Toggle` | boolean | off (track `--bg-3`, knob `--text-1`), on (track `--accent`, knob `--accent-text`), disabled, focus-visible. 36×20, knob 16, slide 120ms |
-| `Segmented` | 2–4 exclusive options | option: idle, hover, selected (`--bg-1` card on `--bg-2` track with `--sh-1`, text-0 500), focus-visible on the group; arrows move selection |
-| `Select` | native `<select>` styled | idle, hover (`--border-strong`), focus, disabled. Chevron icon 14px absolutely positioned, `appearance: none` |
-| `Input` | text/password/url | idle, hover, focus (border `--accent`, ring `--accent-soft` 3px), invalid (border `--err`), disabled, mono variant |
-| `FilterInput` | search input with clear | empty, filled (× visible), focus |
-| `KeyCombo` | row of key caps | size: xs (sidebar), md (recorder/About); tone: default, muted (`--text-2` caps for listening preview) |
-| `HotkeyRecorder` | capture a combo | idle, listening, captured, invalid (§3.4) |
-| `ApiKeyField` | write-only secret | none, saving, saved, replacing, error |
-| `ModelRow` | catalog entry | not-downloaded, downloading (progress), downloaded, active, confirm-delete, error |
-| `ProgressBar` | determinate 4px | value 0–100, indeterminate (sliding 30% chunk, 1.2s) |
-| `HistoryRow` | one transcription | idle, hover, focus, expanded, copied, deleting |
-| `InlineConfirm` | destructive confirm in place | default; Esc cancels; first button gets focus on open |
-| `Banner` | persistent notice | `error`, `info`; dismissible |
-| `EmptyState` | icon + title + body + optional action | — |
-| `Skeleton` | loading rows | — |
-| `Spinner` | 14/10px ring | default; reduced-motion static |
-| `Badge` | small label | `accent` (English only), `ok` (Active), `muted` |
-| `Pill` | overlay root (pill window) | hidden, recording-ptt, recording-free, transcribing, done-pasted, done-copied, error |
-| `Waveform` | 24-bar history | live, collapsing |
-
-All interactive elements: min hit size 32×32 (icon buttons), 36px tall rows; text buttons min
-width 64. Transitions only on `background-color, border-color, color, opacity, transform,
-height` (never `all`).
+Demo: keep the `?demo&state=` query support in `pill.tsx` and extend it with `cleaning`,
+`done-pasted` (with a sample `text`/`raw` pair, e.g. raw `um so I I think we should, uh, ship it
+on on friday` → text `So I think we should ship it on Friday.`), `done-ai-fallback`, and a
+`recording` variant that feeds a synthetic level envelope to `levelRef` at 30 Hz so the
+waveform can be inspected in a plain browser.
 
 ---
 
-## 8. Accessibility
+## 7. Drift checklist (verify against screenshots)
 
-- Contrast: body text ≥ 7:1, secondary ≥ 4.5:1, UI borders ≥ 3:1 against their surface, in both
-  themes (tokens above are chosen for this; keep them).
-- Focus ring on `:focus-visible` everywhere, including rows, segmented groups and toggles; never
-  `outline: none` without a replacement.
-- Toggle = `<button role="switch" aria-checked>`; Segmented = `role="radiogroup"` with radios;
-  HotkeyRecorder = button with `aria-live="polite"` message region for `Press keys…` / errors;
-  ProgressBar = `role="progressbar"` with `aria-valuenow`; Banner error = `role="alert"`; lists
-  use `role="list"` / `listitem` with roving tabindex.
-- Pill: `role="status" aria-live="polite"` content (§2.7). No focus, so no traps.
-- Hit sizes: icon buttons 32×32, toggles 36×20 with 8px padded hit area, rows 36px+.
-- Every icon-only button has `aria-label` (`Copy`, `Delete`, `Cancel download`, `Dismiss`).
-- Never color-only: recording dot + text, badges have text, progress has a percentage.
-- Text scales with OS font size (use rem for font sizes; layout widths in px are fine).
+1. No element in either window has a border-radius other than 0, except the pill body at 4px.
+2. No `box-shadow` with blur anywhere; no gradients; no translucent surfaces (pill bg is opaque).
+3. Exactly three hues exist: `#C8F542` (or `#3E6B00` in light), `--err` red, and grays. No green,
+   amber, coral or blue.
+4. Pill is 380 × 64 (92 when done with text), 1px edge, opaque `#0A0A0A` in dark / `#FFFFFF` in light.
+5. Recording pill: 8×8 accent square, `00:00`-style mono timer, canvas waveform, `ESC` cap;
+   no "Recording" word, no ✕ button.
+6. Waveform: 2px bars, 2px gaps, ~47 bars across 188px, uniform `--text-0` color, silence is a
+   flat dotted line at 2px, bars slide continuously left (not jumping) at 60 Hz.
+7. Push-to-talk: the square blinks with hard steps (no fade); hands-free: steady.
+8. Transcribing/cleaning: hollow accent square, uppercase mono label, 40px accent segment
+   sweeping a 2px track.
+9. Done: filled accent square, `PASTED`/`COPIED` in accent, snippet on a second line in sans,
+   and a `−N FILLERS` / `EDITED` mono note on the right when raw differs.
+10. Error: red square, `ERROR`, message in sans, `SEE VOXFLOW` at the right; gone after 3s.
+11. Settings sidebar: `VOXFLOW` mono uppercase wordmark, numbered nav 1–6, active item marked by
+    a 2px accent bar and accent index only (no filled background), tools block with
+    `Transcribe file…` and `Preview overlay`, footer status in uppercase mono.
+12. Segmented selected option is inverted (white block, black text in dark theme).
+13. Primary button is a lime block with black text; secondary is an outlined transparent box;
+    toggles are rectangles with square knobs.
+14. Boxes have 1px borders with the eyebrow label sitting on the top border in uppercase mono.
+15. Cleanup section has the Off/Basic/AI segmented control and a provider box with a preset
+    Select listing Ollama, LM Studio, OpenAI, Groq, OpenRouter, Anthropic, Custom.
+16. Playground shows two side-by-side boxes labelled `BASIC` and `AI`; the AI box shows a red
+    `AI · FAILED` eyebrow and the error text when the backend reports `aiError`.
+17. History rows show cleaned text, a `RAW` toggle only on entries that have raw, and the raw
+    text appears in a bordered mono block below.
+18. Focus ring is a 2px lime outline on every focusable element when tabbing; none on mouse click.
+19. Fonts render as Archivo and JetBrains Mono with the network disabled.
+20. With `prefers-reduced-motion`, the pill only fades, the square does not blink, the sweep is
+    a stepping 3-block indicator, and the waveform still moves but jumps per sample.
