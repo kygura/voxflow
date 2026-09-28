@@ -3,6 +3,8 @@
 //! the shell runs them on its own threads.
 
 pub mod audio;
+pub mod cleanup;
+pub mod decode;
 pub mod history;
 pub mod models;
 pub mod output;
@@ -71,4 +73,38 @@ pub(crate) fn test_dir(tag: &str) -> std::path::PathBuf {
     let _ = std::fs::remove_dir_all(&d);
     std::fs::create_dir_all(&d).unwrap();
     d
+}
+
+#[cfg(test)]
+/// Test-only one-shot HTTP server: returns the base URL and a handle yielding the raw request.
+pub(crate) fn mock_http(status: &str, body: &str) -> (String, std::thread::JoinHandle<String>) {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let base = format!("http://{}/v1/", listener.local_addr().unwrap());
+    let response = format!(
+            "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        );
+    let handle = std::thread::spawn(move || {
+        use std::io::{BufRead, Read, Write};
+        let (stream, _) = listener.accept().unwrap();
+        let mut reader = std::io::BufReader::new(stream);
+        let mut head = String::new();
+        let mut len = 0usize;
+        loop {
+            let mut line = String::new();
+            reader.read_line(&mut line).unwrap();
+            if let Some(v) = line.to_ascii_lowercase().strip_prefix("content-length:") {
+                len = v.trim().parse().unwrap();
+            }
+            head.push_str(&line);
+            if line == "\r\n" {
+                break;
+            }
+        }
+        let mut body = vec![0; len];
+        reader.read_exact(&mut body).unwrap();
+        reader.get_mut().write_all(response.as_bytes()).unwrap();
+        head + &String::from_utf8_lossy(&body)
+    });
+    (base, handle)
 }

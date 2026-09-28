@@ -132,16 +132,7 @@ pub mod remote {
         let body = resp.text().context("failed to read server response")?;
         let json: Option<serde_json::Value> = serde_json::from_str(&body).ok();
         if !status.is_success() {
-            let msg = json
-                .as_ref()
-                .and_then(|j| j["error"]["message"].as_str().map(str::to_owned))
-                .unwrap_or(body);
-            let msg = match key {
-                Some(key) => msg.replace(key, "***"), // in case the server echoes it back
-                None => msg,
-            };
-            let msg: String = msg.trim().chars().take(300).collect();
-            bail!("server returned {status}: {msg}");
+            bail!(http_error(status, json.as_ref(), body, key));
         }
         match json.as_ref().and_then(|j| j["text"].as_str()) {
             Some(text) => Ok(text.trim().to_owned()),
@@ -149,9 +140,30 @@ pub mod remote {
         }
     }
 
+    /// "server returned <status>: <message>" from an OpenAI-style error body,
+    /// with the key masked (before truncation) in case the server echoes it back.
+    pub(crate) fn http_error(
+        status: reqwest::StatusCode,
+        json: Option<&serde_json::Value>,
+        body: String,
+        key: Option<&str>,
+    ) -> String {
+        let msg = json
+            .and_then(|j| j["error"]["message"].as_str().map(str::to_owned))
+            .unwrap_or(body);
+        let msg = match key {
+            Some(key) => msg.replace(key, "***"),
+            None => msg,
+        };
+        let msg: String = msg.trim().chars().take(300).collect();
+        format!("server returned {status}: {msg}")
+    }
+
     /// https, or plain http to a loopback host. LAN http servers are fine, just not with a key.
-    fn key_transport_ok(url: &str) -> bool {
-        let Ok(url) = reqwest::Url::parse(url) else { return false };
+    pub(crate) fn key_transport_ok(url: &str) -> bool {
+        let Ok(url) = reqwest::Url::parse(url) else {
+            return false;
+        };
         let host = url.host_str().unwrap_or("");
         match url.scheme() {
             "https" => true,
@@ -175,41 +187,8 @@ pub mod remote {
     #[cfg(test)]
     mod tests {
         use super::*;
-        use std::io::{BufRead, BufReader, Read, Write};
-        use std::net::TcpListener;
-        use std::thread::JoinHandle;
 
-        /// One-shot HTTP server: returns the base URL and a handle yielding the raw request.
-        fn mock(status: &str, body: &str) -> (String, JoinHandle<String>) {
-            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-            let base = format!("http://{}/v1/", listener.local_addr().unwrap());
-            let response = format!(
-                "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
-                body.len()
-            );
-            let handle = std::thread::spawn(move || {
-                let (stream, _) = listener.accept().unwrap();
-                let mut reader = BufReader::new(stream);
-                let mut head = String::new();
-                let mut len = 0usize;
-                loop {
-                    let mut line = String::new();
-                    reader.read_line(&mut line).unwrap();
-                    if let Some(v) = line.to_ascii_lowercase().strip_prefix("content-length:") {
-                        len = v.trim().parse().unwrap();
-                    }
-                    head.push_str(&line);
-                    if line == "\r\n" {
-                        break;
-                    }
-                }
-                let mut body = vec![0; len];
-                reader.read_exact(&mut body).unwrap();
-                reader.get_mut().write_all(response.as_bytes()).unwrap();
-                head + &String::from_utf8_lossy(&body)
-            });
-            (base, handle)
-        }
+        use crate::mock_http as mock;
 
         fn cfg(base_url: String) -> RemoteConfig {
             RemoteConfig {
@@ -261,8 +240,12 @@ pub mod remote {
         #[test]
         fn key_never_sent_over_plain_http_to_non_loopback() {
             for base in ["http://192.0.2.1:9/v1", "http://example.invalid/v1"] {
-                let err = transcribe(&cfg(base.into()), Some("sk-x"), &[0.0; 1600], "en").unwrap_err();
-                assert_eq!(err.to_string(), "API key is only sent over https (or localhost)");
+                let err =
+                    transcribe(&cfg(base.into()), Some("sk-x"), &[0.0; 1600], "en").unwrap_err();
+                assert_eq!(
+                    err.to_string(),
+                    "API key is only sent over https (or localhost)"
+                );
             }
             assert!(key_transport_ok("http://localhost:8000/v1"));
             assert!(key_transport_ok("http://127.8.0.1/v1"));
@@ -274,9 +257,13 @@ pub mod remote {
         #[test]
         fn key_masked_before_truncation() {
             // Key straddles the 300-char cut: truncating first would leak its prefix.
-            let body = format!(r#"{{"error":{{"message":"{}sk-secret-abcdef"}}}}"#, "x".repeat(295));
+            let body = format!(
+                r#"{{"error":{{"message":"{}sk-secret-abcdef"}}}}"#,
+                "x".repeat(295)
+            );
             let (base, h) = mock("401 Unauthorized", &body);
-            let err = transcribe(&cfg(base), Some("sk-secret-abcdef"), &[0.0; 1600], "auto").unwrap_err();
+            let err =
+                transcribe(&cfg(base), Some("sk-secret-abcdef"), &[0.0; 1600], "auto").unwrap_err();
             h.join().unwrap();
             assert!(!err.to_string().contains("sk-se"), "{err}");
         }

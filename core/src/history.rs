@@ -17,6 +17,9 @@ pub struct HistoryEntry {
     pub backend: Backend,
     pub model: String,
     pub duration_ms: u64,
+    /// Transcript before cleanup; absent when identical to `text` (and in pre-v2 entries).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub raw: Option<String>,
 }
 
 impl HistoryEntry {
@@ -38,7 +41,15 @@ impl HistoryEntry {
             backend,
             model,
             duration_ms,
+            raw: None,
         }
+    }
+
+    /// Record the pre-cleanup transcript, only if it differs from `text`.
+    pub fn with_raw(mut self, raw: &str) -> Self {
+        let raw = raw.trim();
+        self.raw = (raw != self.text.trim()).then(|| raw.to_owned());
+        self
     }
 }
 
@@ -131,5 +142,32 @@ mod tests {
         h3.clear();
         h3.save().unwrap();
         assert!(History::load(&path).entries().is_empty());
+    }
+
+    #[test]
+    fn raw_only_when_different_and_old_json_loads() {
+        let same = entry("Hello.").with_raw(" Hello. ");
+        assert_eq!(same.raw, None);
+        let json = serde_json::to_value(&same).unwrap();
+        assert!(json.get("raw").is_none(), "{json}");
+
+        let cleaned = entry("I think so.").with_raw("um I I think so");
+        assert_eq!(cleaned.raw.as_deref(), Some("um I I think so"));
+        assert_eq!(
+            serde_json::to_value(&cleaned).unwrap()["raw"],
+            "um I I think so"
+        );
+
+        let dir = crate::test_dir("history-v1");
+        let path = dir.join("history.json");
+        std::fs::write(
+            &path,
+            r#"[{"id":"a-0","text":"old","createdAt":1,"backend":"remote","model":"whisper-1","durationMs":5}]"#,
+        )
+        .unwrap();
+        let h = History::load(&path);
+        assert_eq!(h.entries().len(), 1);
+        assert_eq!(h.entries()[0].raw, None);
+        assert!(path.exists(), "valid old file must not be moved to .bak");
     }
 }
