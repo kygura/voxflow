@@ -1,5 +1,59 @@
 # VoxFlow — Design Brief (v3)
 
+## Round 2 changes (apply directly; each line is file → what → exact values)
+
+1. `src-tauri/tauri.conf.json`, `src-tauri/src/dictation.rs` → pill window height 220 → **240**
+   (`440 × 240`, `(440.0 * s, 240.0 * s)`). The 4-line bubble was clipped at the top.
+2. `src/styles/pill.css` `.bubble` → `max-width: 400px` → **`360px`** (same width as the pill so
+   the stack reads as one object; the 400px bubble overhung the pill by 20px per side and its
+   shadow hit the window edge).
+3. `src/pill.tsx` → done state: **remove the note from the pill's right slot**. The
+   `−N fillers` / `Edited` / `AI failed · basic` note lives in the bubble footer only. Pill in
+   done = `● Pasted` / `● Copied`, nothing on the right (matches the paste-last flash, which
+   already looked right).
+4. `src/pill.tsx` → error state: **drop the `Error` label word**; the red dot carries the
+   state. Message gets the whole content slot from x = dot + 12px, Inter `--fs-md` `--text-0`,
+   ellipsis at ~44 chars; `Open VoxFlow` stays on the right. ("Microphone not r…" was
+   unreadable.)
+5. `src/pill.tsx` → warm-up label `Listening…` → **`Listening`** (no ellipsis; the three dots
+   already are the ellipsis, the screen read "Listening... •••"). Dots: 5×5, gap 5,
+   `margin-left: 4px`.
+6. `src/components/Waveform.tsx` → `BAR_GAP = 2` → **`3`** (pitch 6, ~35 bars at 208px);
+   height mapping `4 + 24 * sqrt(v)` → **`3 + 25 * Math.pow(v, 1.5)`** (floor 3px). With
+   perceptual input, `sqrt` pinned every bar at 20–28px and the result was a comb, not speech.
+   Target: speech peaks 16–26px, consonant gaps 6–10px, silence a 3px dotted line.
+7. `src/components/ui.tsx` `Sweep`, `src/styles/pill.css` → replace the container-unit travel
+   with a percentage segment: `.sweep-segment { width: 40%; }`, keyframes `left: -40% → 100%`,
+   **1200ms** linear infinite. Remove `container-type` and `--sweep-travel` (the segment
+   rendered as a ~10px dot in every screenshot). Progress-bar indeterminate uses the same.
+8. `src/styles/app.css` `.field` → label column `240px` → **`300px`** (helpers wrapped to three
+   lines next to a wide empty gutter).
+9. `src/components/HotkeyRecorder.tsx`, `app.css` → with `allowEmpty` and a value set, the
+   `Clear` action goes **inside** the recorder box as a second text action after `Change`
+   (`Change  ·  Clear`, separator `--text-2`), so both recorders are the same width (380px).
+   Delete `.hotkey-recorder-clear` outside the box.
+10. `src/styles/app.css` `.sidebar-footer` → `display: grid; grid-template-columns: 8px 1fr;
+    column-gap: 10px; align-items: start;` dot `margin-top: 6px` so it sits on the `Idle`
+    line, and the keycaps row aligns under the text (dot currently floats below the label).
+11. `src/sections/Transcription.tsx` → subtitle **`Where speech is turned into text.`**; move the
+    `Backend` segmented field into a Box with heading `Backend`; remove the stray hairline under
+    the header (no other section has one).
+12. `src/sections/Dictionary.tsx`, `app.css` → add-row and list rows share one grid:
+    `grid-template-columns: 1fr 24px 1fr 88px`, both with `padding: 0 16px`; the `Add` button
+    (width 88) sits in the last column of the add row and the trash icon right-aligns in the
+    same column of each list row, so the two arrows line up (they were 20px apart).
+13. `src/styles/app.css` `.btn--primary:disabled` → not opacity: **bg `--accent-soft`, color
+    `--text-2`, no filter** (the 45%-opacity lime read as olive mud in dark and washed-out in
+    light).
+14. `src/sections/History.tsx`, `app.css` → the list stays **without** a Box (the shipped plain
+    hairline list is cleaner; spec updated). The `Raw` toggle becomes a chip: Badge `muted`
+    style, `aria-pressed` on → Badge `accent` style.
+15. `src/styles/pill.css` `.bubble-footer` → `margin-top: 8px` → **`10px`**.
+
+Everything else shipped as specified. Sections below are updated to match.
+
+---
+
 Audience: the implementer. Plain CSS + custom properties, no Tailwind, no UI kit, icons are
 inline SVG. Everything here is a decision. If something is missing, pick the option with fewer
 colors, softer edges and larger type.
@@ -142,26 +196,25 @@ existing `useReducedMotion` hook in `pill.tsx` stays and is passed down.
 
 ### 2.1 Window
 
-- Logical size **440 × 220**. Update `tauri.conf.json` (`width: 440, height: 220`) and the
-  `(400.0 * s, 112.0 * s)` in `src-tauri/src/dictation.rs` to `(440.0 * s, 220.0 * s)`.
+- Logical size **440 × 240**. Update `tauri.conf.json` (`width: 440, height: 240`) and the
+  `(400.0 * s, 112.0 * s)` in `src-tauri/src/dictation.rs` to `(440.0 * s, 240.0 * s)`.
 - Layout inside the window, bottom-anchored (growth goes upward):
 
 ```
  y=0   ┌──────────────────────────── 440 ────────────────────────────┐
        │                (empty, transparent)                         │
-       │        ┌──────────────── bubble ≤ 400 ────────────────┐     │  bubble bottom = pill top − 10
-       │        │  transcript, ≤ 4 lines                       │     │
-       │        │  −4 fillers                   Click to copy  │     │
-       │        └───────────────────────────────────────────────┘     │
+       │             ┌──────────── bubble ≤ 360 ────────────┐         │  bubble bottom = pill top − 10
+       │             │  transcript, ≤ 4 lines               │         │
+       │             │  −4 fillers           Click to copy  │         │
+       │             └──────────────────────────────────────┘         │
        │             ╭──────────── pill 360 × 56 ───────────╮         │  pill bottom = window bottom − 12
- y=220 └─────────────╰──────────────────────────────────────╯─────────┘
+ y=240 └─────────────╰──────────────────────────────────────╯─────────┘
 ```
 
   Pill: **360 × 56**, horizontally centered, `bottom: 12px`. Bubble: centered, `max-width:
-  400px`, `bottom: 78px` (12 + 56 + 10). Vertical budget: 12 + 56 + 10 + bubble max ~134
-  (see §2.7) = 212 ≤ 220, leaving 8px for the shadow. Shadow is clipped at the window edge
-  on the sides by design (12px of 24px blur reaches the edge only at the widest bubble; that
-  is acceptable, do not widen the window).
+  360px` (equal to the pill, so the stack reads as one object), `bottom: 78px` (12 + 56 + 10).
+  Vertical budget: 12 + 56 + 10 + bubble max 140 (see §2.7) = 218, leaving 22px of headroom
+  for the shadow and the entrance overshoot. Sides: 40px each for the shadow.
 - Position: pill bottom edge 24px above the monitor work area → **window bottom = work area
   bottom − 12px**. Fallback without work area: window bottom = monitor bottom − 60px.
   Recompute on every show.
@@ -202,23 +255,23 @@ and text `--text-0`. Hit area 32×32 via padding on a transparent wrapper.
 | State | Dot | Label (Inter 16/500) | Content slot | Right slot | Shown for |
 | --- | --- | --- | --- | --- | --- |
 | idle | — | — | — | — | hidden |
-| recording · warm-up (no level event yet) | `--accent` filled, steady | `Listening…` in `--text-1` | Warm-up dots (§2.5) | `Esc` | until first `dictation://level` (backend fails the session at 1500ms) |
+| recording · warm-up (no level event yet) | `--accent` filled, steady | `Listening` in `--text-1` (no ellipsis; the dots are the ellipsis) | Warm-up dots (§2.5) | `Esc` | until first `dictation://level` (backend fails the session at 1500ms) |
 | recording · live, hands-free | `--accent` filled, steady | timer `00:04` in `--text-0` | Waveform (§2.6) | `Esc` | until stop |
 | recording · live, push-to-talk (key held) | `--accent` filled, **pulse**: opacity 1 → .45 → 1, 1200ms `ease-in-out` infinite | timer | Waveform | `Esc` | until release |
 | transcribing | ring: transparent fill, `2px solid --accent` | `Transcribing…` in `--text-0` | Sweep (§2.8) | `Esc` | until backend |
 | cleaning | same ring | `Cleaning up…` | Sweep | `Esc` | until backend |
-| done: Pasted | `--accent-fill` filled | `Pasted` in `--accent`, weight 600 | empty | note (§2.7) | 2200ms |
-| done: Copied | same | `Copied` in `--accent` 600 | empty | note | 2600ms |
-| done with AI fallback | same | `Pasted` / `Copied` | empty | `AI failed · basic` in `--err` | 3000ms |
-| done · paste-last flash (text, no raw) | same | `Pasted` / `Copied` | empty | nothing | 2200ms |
-| done · after bubble click | same | `Copied` swaps in for 1000ms then reverts | empty | note | dismissal paused during the 1000ms |
-| error | `--err` filled | `Error` in `--err` 600 | message, Inter `--fs-md` `--text-0`, one line, ellipsis, ≤ 56 chars | `Open VoxFlow` `--fs-sm` `--text-2` | 3500ms |
+| done: Pasted | `--accent-fill` filled | `Pasted` in `--accent`, weight 600 | empty | **empty** (the note lives in the bubble footer, §2.7) | 2200ms |
+| done: Copied | same | `Copied` in `--accent` 600 | empty | empty | 2600ms |
+| done with AI fallback | same | `Pasted` / `Copied` | empty | empty (bubble footer shows `AI failed · basic`) | 3000ms |
+| done · paste-last flash (text, no raw) | same | `Pasted` / `Copied` | empty | empty | 2200ms |
+| done · after bubble click | same | `Copied` swaps in for 1000ms then reverts | empty | empty | dismissal paused during the 1000ms |
+| error | `--err` filled | **no label** (the red dot is the state) | message, Inter `--fs-md` `--text-0`, starts 12px after the dot, one line, ellipsis (~44 chars visible) | `Open VoxFlow` `--fs-sm` `--text-2` | 3500ms |
 
 Recording mode (`mode` on `dictation://state`): `push_to_talk` → pulsing dot; `toggle` or
 absent → steady. Hybrid opens pulsing; when the backend re-sends `mode: "toggle"` the pulse
 stops (transition over `--dur-2`, not a hard cut). No "release to stop" text.
 
-Warm-up → live is a content-slot crossfade (`--dur-2`); the label swaps `Listening…` → timer at
+Warm-up → live is a content-slot crossfade (`--dur-2`); the label swaps `Listening` → timer at
 the same moment. The timer starts counting at the first `recording` event (so it can read
 `00:01` when it appears); it is simply hidden during warm-up.
 
@@ -233,21 +286,21 @@ clipboard`, `Error: <message>`.
 
 | Where | Copy |
 | --- | --- |
-| Warm-up label | `Listening…` |
+| Warm-up label | `Listening` |
 | Transcribing / cleaning labels | `Transcribing…` / `Cleaning up…` |
 | Done labels | `Pasted` / `Copied` |
 | Removed-count note (bubble footer and pill right slot) | `−N fillers` (N ≥ 1, U+2212 minus), or `Edited` when raw differs but N ≤ 0, nothing when raw is absent |
 | AI fallback note | `AI failed · basic` (shown when `message` contains "AI cleanup failed") |
 | Bubble hint | `Click to copy` → `Copied` for 1000ms after click |
-| Error label / right note | `Error` / `Open VoxFlow` |
+| Error right note | `Open VoxFlow` (there is no `Error` label word) |
 | Cancel cap | `Esc` |
 
 Sentence case everywhere. No uppercase, no letter-spacing.
 
 ### 2.5 Warm-up dots (recording, before the first level event)
 
-Three 6×6 `--r-full` dots in `--text-1`, gap 6, left-aligned in the content slot, vertically
-centered. Animation: each dot `opacity .35 → 1 → .35`, `transform: scale(.85 → 1 → .85)`,
+Three 5×5 `--r-full` dots in `--text-1`, gap 5, `margin-left: 4px`, left-aligned in the
+content slot, vertically centered. Animation: each dot `opacity .35 → 1 → .35`, `transform: scale(.85 → 1 → .85)`,
 900ms `ease-in-out` infinite, delays 0 / 150 / 300ms. Reduced motion: steady at opacity .6,
 no scale. This is the "mic is opening" cue. It never shows once a level event has arrived,
 even if levels drop to 0 afterwards.
@@ -261,10 +314,11 @@ and on `ResizeObserver`; at 360px pill it is ~208px), height **28**, backing sto
 
 Geometry:
 
-- Bar width **3px**, gap **2px**, pitch 5px → `N = floor((W + 2) / 5)` = **42** bars at 208px.
+- Bar width **3px**, gap **3px**, pitch 6px → `N = floor((W + 3) / 6)` = **35** bars at 208px.
+  (Round 2: was gap 2 / 42 bars; too dense, read as a comb.)
 - Bars are **rounded**: `ctx.roundRect(x, y, 3, h, 1.5)` (WebView2 supports it; fallback to
   `fillRect` if `roundRect` is undefined).
-- Height range **4px (floor) to 28px (full)**, **mirrored around the vertical center** (a bar of
+- Height range **3px (floor) to 28px (full)**, **mirrored around the vertical center** (a bar of
   height `h` spans `y = (28 − h) / 2` to `(28 + h) / 2`). This is what makes it read as audio,
   not a bar chart.
 - Color `--text-0` for bars, uniform. Read via `getComputedStyle` each frame (cheap) so theme
@@ -282,12 +336,15 @@ Signal (input is already perceptual 0..1, speech ≈ 0.5–0.8, one event per 25
 
 Draw (per rAF):
 
-- `h = 4 + 24 * sqrt(sample)`, mirrored as above. `sqrt` lifts quiet speech.
+- `h = 3 + 25 * pow(sample, 1.5)`, mirrored as above. The input is already perceptual, so
+  a compressive curve (`sqrt`) pinned everything at the top; the expansive `1.5` power gives
+  the dynamics back: `v = 0.3 → 7px`, `0.5 → 12px`, `0.8 → 21px`, `1.0 → 28px`. Speech should
+  show peaks of 16–26px with 6–10px valleys between syllables.
 - **Tape slide**: offset the whole row by `−(elapsedSinceLastPush / 25) * 5` px so bars travel
   continuously left at 5px per 25ms. Clip to the canvas. Reduced motion: offset 0.
 - The rightmost bar draws the **live `env`** rather than the last pushed sample.
-- Silence: all bars at 4px → a row of small rounded 3×4 dots. That is the "listening, quiet"
-  look. No placeholder text.
+- Silence: all bars at 3px → a dotted 3×3 line. That is the "listening, quiet" look. No
+  placeholder text.
 - Values ≥ 1 clamp to 28px. No peak-hold, no clipping color, no left-to-right fade.
 
 Bookkeeping: cancel the rAF on unmount and when `state` leaves recording; reset `env`, ring and
@@ -301,32 +358,34 @@ non-empty (real dictation, transcribe-file, and the paste-last flash which has `
 sibling of the pill body (not inside it).
 
 ```
- ╭────────────────────────────────────────────────────────╮  r=18, --pill-bg, 1px --pill-line, --shadow-float
- │ So I think we should ship the new build on Friday,     │  padding 14px 16px 12px
- │ no wait, Monday. Let me check with the team first      │  Inter 16/22 --text-0, ≤ 4 lines
- │ and get back to you about the timeline for the…        │
- │                                                        │
- │ −4 fillers                              Click to copy  │  footer row, Inter 13 --text-2, margin-top 8
- ╰────────────────────────────────────────────────────────╯
+ ╭────────────────────────────────────────────────────╮  r=18, --pill-bg, 1px --pill-line, --shadow-float
+ │ So I think we should ship the new build on         │  padding 14px 16px 12px
+ │ Friday, no wait, Monday. Let me check with the     │  Inter 16/22 --text-0, ≤ 4 lines
+ │ team first and get back to you about the…          │
+ │                                                    │
+ │ −4 fillers                          Click to copy  │  footer row, Inter 13 --text-2, margin-top 10
+ ╰────────────────────────────────────────────────────╯
 ```
 
-- Box: `max-width: 400px; min-width: 240px; width: max-content` (so short transcripts get a
-  small bubble), centered over the pill, `bottom: 78px`. `--r-4`, bg `--pill-bg`, border 1px
-  `--pill-line`, `box-shadow: var(--shadow-float)`. Padding `14px 16px 12px`.
+- Box: `max-width: 360px; min-width: 240px; width: max-content` (so short transcripts get a
+  small bubble; long ones are exactly as wide as the pill), centered over the pill, `bottom:
+  78px`. `--r-4`, bg `--pill-bg`, border 1px `--pill-line`, `box-shadow: var(--shadow-float)`.
+  Padding `14px 16px 12px`.
 - Text: Inter `--fs-bubble` (16/22) `--text-0`, `white-space: pre-wrap`, `overflow-wrap:
   anywhere`, clamped to **4 lines** with `display: -webkit-box; -webkit-line-clamp: 4;
   -webkit-box-orient: vertical; overflow: hidden` (ellipsis on the 4th line). Additionally a
   12px-tall bottom fade is **not** used — the ellipsis is enough and a fade over opaque text is
   a gradient. Max content height = 88px.
 - Footer row (only rendered when it has something): `display: flex; justify-content:
-  space-between; margin-top: 8px`, Inter `--fs-sm` `--text-2`. Left: the removed-count note
+  space-between; margin-top: 10px`, Inter `--fs-sm` `--text-2`. Left: the removed-count note
   (`−4 fillers` / `Edited`, or `AI failed · basic` in `--err`), or empty. Right: `Click to
   copy`; after a click it reads `Copied` in `--accent` for 1000ms. For the paste-last flash the
   left is empty and the right still shows `Click to copy`.
-- Bubble max height: 14 + 88 + 8 + 18 + 12 = **140px** (the §2.1 budget rounds this to 134 +
-  shadow; 12 + 56 + 10 + 140 = 218 ≤ 220, fine).
-- The pill's right slot still shows the note (so the state is understandable if the bubble is
-  glanced past); the bubble footer repeats it. No note in the pill during the paste-last flash.
+- Bubble max height: 14 + 88 + 10 + 18 + 12 = **142px** (12 + 56 + 10 + 142 = 220 ≤ 240).
+- **The note appears in the bubble footer only.** The pill's right slot is empty in every done
+  variant. Rationale: the note describes the transcript, and the transcript is in the bubble;
+  showing it twice (round 1) made the two surfaces compete and the pill look like a second,
+  worse bubble.
 - **Click** anywhere on the bubble → `copy_text(text)`; footer swaps to `Copied`, pill label
   swaps to `Copied` (§2.3); dismissal timer pauses for the 1000ms feedback, then resumes with
   the remaining time (minimum 800ms). Cursor `pointer` on the bubble.
@@ -342,9 +401,12 @@ sibling of the pill body (not inside it).
 
 ### 2.8 Sweep (transcribing, cleaning)
 
-Content slot shows a `100% × 4px` track, `--r-full`, bg `--line`, overflow hidden, with a
-**48px `--accent` segment** (also `--r-full`) moving left→right over **1100ms `--ease-lin`,
-infinite**, restarting hard. Vertically centered. Reduced motion: three 6×6 `--r-full` dots
+Content slot shows a `100% × 4px` track, `--r-full`, bg `--line`, `position: relative;
+overflow: hidden`, with a **`--accent` segment `width: 40%`** of the track (also `--r-full`,
+`position: absolute; top: 0`) animating **`left: -40% → 100%`** over **1200ms `--ease-lin`,
+infinite**, restarting hard. No container units, no `--sweep-travel` variable, no transform
+math: percentages only, so it renders the same in every engine (round 1 shipped a ~10px dot).
+Vertically centered. Reduced motion: three 6×6 `--r-full` dots
 (gap 6) at the left of the slot, in `--line-strong`; dots fill `--accent` in sequence (1, 2, 3,
 none, 1 …) every 500ms via `steps(1)`. The existing `.sweep` / `.sweep-reduced` classes stay;
 only the sizes and radii change.
@@ -414,10 +476,13 @@ only the sizes and radii change.
 - **Tools block** (below nav, above footer, `border-top: 1px solid --line`, padding 12px):
   two full-width secondary buttons stacked, gap 8: `Transcribe file…` and `Preview overlay`
   (behaviour unchanged).
-- **Footer** (`border-top: 1px solid --line`, padding 16px 20px): status line Inter `--fs-sm`
-  500: 8×8 `--r-full` dot + `Idle` / `Recording` / `Transcribing` / `Cleaning` (dot `--text-2`
-  idle, `--accent` recording, ring for transcribing/cleaning), and under it the current hotkey
-  as `KeyCombo` xs.
+- **Footer** (`border-top: 1px solid --line`, padding 16px 20px): `display: grid;
+  grid-template-columns: 8px 1fr; column-gap: 10px; align-items: start`. Column 1: 8×8
+  `--r-full` dot with `margin-top: 6px` so it centers on the first text line (dot `--text-2`
+  idle, `--accent` recording, ring for transcribing/cleaning). Column 2: `Idle` / `Recording`
+  / `Transcribing` / `Cleaning` in Inter `--fs-sm` 500 `--text-1`, and under it (margin-top 6)
+  the current hotkey as `KeyCombo` xs. The dot and the word share a baseline; the keycaps
+  align under the word, not under the dot.
 
 **SectionHeader**: title `--fs-xl` 600 `--text-0` (`tabindex=-1`, focus target), subtitle
 `--fs-sm` `--text-1` 4px below, right slot for `Saved` (Inter `--fs-sm` 500 `--accent`, 1.2s,
@@ -430,8 +495,9 @@ existing `useSavedFlash`) or the history filter. No bottom border; **28px bottom
 `--fs-sm` 500 `--text-2`, sentence case, padding `14px 0 2px`. Keep React names `Card` /
 `CardTitle`.
 
-**Field**: horizontal row, label column **240px** (label `--fs-md` 500 `--text-0`, helper
-`--fs-sm` `--text-1` 2px under it), control right-aligned with `min-width: 0`, padding
+**Field**: horizontal row, label column **300px** (label `--fs-md` 500 `--text-0`, helper
+`--fs-sm` `--text-1` 2px under it; helpers should wrap to at most two lines at this width),
+control right-aligned with `min-width: 0`, padding
 `14px 0`, `border-top: 1px solid --line` between rows (first row none). Disabled: label
 `--text-2`, control 50% opacity. Error: message under the control in `--err` `--fs-sm`.
 Controls save on change; `Saved` flashes in the header.
@@ -457,14 +523,18 @@ Boxes and fields (new items marked ★):
 `border: 1px solid --line`, bg `--bg-0`, padding `0 10px`, `KeyCombo` inside, right text
 `Change` in `--fs-sm` 500 `--accent`. Listening: border `--accent`, caps replaced by `Press
 keys…` in `--text-1`, right text `Esc to cancel`. Captured: border flashes `--accent` 600ms.
-Invalid: border `--err` + message under the field. With `allowEmpty`: when the value is `""`
-the box shows a `Off` badge (muted) and the right text is `Set`; when set, a ghost `Clear`
-button (28px, `--fs-sm`) sits **outside** the box to its right and saves `""`. Saving a paste-
-last combo equal to the dictation hotkey is rejected with `Same as the dictation hotkey.`
+Invalid: border `--err` + message under the field. The recorder is **380px wide** in both
+fields. With `allowEmpty`: when the value is `""` the box shows an `Off` badge (muted) and the
+right text is `Set`; when set, the right side reads `Change  ·  Clear` (two text actions,
+`--fs-sm` 500 `--accent`, separated by ` · ` in `--text-2`, gap 8), both **inside** the box;
+`Clear` saves `""`. Nothing sits outside the box. Saving a paste-last combo equal to the
+dictation hotkey is rejected with `Same as the dictation hotkey.`
 
 ### 3.4 Transcription (unchanged content, new skin)
 
-Segmented `Local` / `Server`. Local: Box `Models` with `ModelRow`s (52px tall, name Inter
+Title `Transcription`, subtitle `Where speech is turned into text.` No hairline under the
+header (no section has one). Box `Backend` with one Field `Backend` → Segmented `Local` /
+`Server` (round 1 left this floating outside a box with a stray divider). Local: Box `Models` with `ModelRow`s (52px tall, name Inter
 `--fs-md` 500, size `--fs-sm` `--text-1`, `EN` badge, status column: `Download` secondary /
 progress + `61%` + `Cancel` ghost / `Use` secondary + trash icon / `Active` badge accent). Delete
 = inline confirm. Server: Box `Server` with preset Select, Base URL (mono input), Model (mono
@@ -488,18 +558,21 @@ write instead. Applied to the raw transcript before cleanup. Whole words, case-i
 
 Layout, top to bottom:
 
-1. **Add row** (`.dict-add`): `display: grid; grid-template-columns: 1fr 24px 1fr auto; gap:
-   8px; align-items: center`. Input `Heard as` (placeholder `vox flow`), an arrow glyph `→` in
-   `--text-2` `--fs-md` centered, Input `Write` (placeholder `VoxFlow`), primary Button `Add`.
+1. **Add row** (`.dict-add`): `display: grid; grid-template-columns: 1fr 24px 1fr 88px;
+   column-gap: 8px; align-items: center; padding: 0 16px`. Input `Heard as` (placeholder `vox
+   flow`), an arrow glyph `→` in `--text-2` `--fs-md` centered, Input `Write` (placeholder
+   `VoxFlow`), primary Button `Add` (`width: 88px`). **The list rows below use the identical
+   grid and padding**, so the add-row arrow and every row arrow sit on the same x.
    Enter in either input = Add. Both inputs Inter (not mono), 36px, `--r-2`. Disabled Add when
    `from` is empty (trimmed). Validation inline under the row (`--err` `--fs-sm`): `Already in
    the dictionary.` (case-insensitive duplicate `from`), `Dictionary is full (200).`
 2. **Count line** right-aligned under the add row: `12 of 200` Inter `--fs-sm` `--text-2`,
    tabular. At ≥ 190 it turns `--err`.
-3. **List** (`.dict-list`): a Box (`--bg-1`, `--r-3`) with rows 48px tall, padding `0 16px`,
-   hairline dividers. Row: `grid-template-columns: 1fr 24px 1fr 32px`: `from` in Inter
-   `--fs-md` `--text-1`, arrow `→` `--text-2`, `to` in Inter `--fs-md` 500 `--text-0`, and an
-   icon Button (trash, 28×28, ghost, visible on hover/focus, `aria-label="Remove <from>"`).
+3. **List** (`.dict-list`): a Box (`--bg-1`, `--r-3`, `padding: 0`) with rows 48px tall,
+   `padding: 0 16px`, hairline dividers. Row: `grid-template-columns: 1fr 24px 1fr 88px;
+   column-gap: 8px` (same as the add row): `from` in Inter `--fs-md` `--text-1`, arrow `→`
+   `--text-2`, `to` in Inter `--fs-md` 500 `--text-0`, and in the last column, right-aligned,
+   an icon Button (trash, 28×28, ghost, visible on hover/focus, `aria-label="Remove <from>"`).
    Rows are **editable in place**: clicking `from` or `to` turns it into an Input (same cell,
    no layout shift: the Input is 32px, `--r-1`, bg `--bg-0`); blur or Enter saves, Esc reverts.
    Newest entry first. Delete: row collapses `--dur-3`, no confirm.
@@ -524,8 +597,8 @@ second `Basic output would be used.` in `--text-1`. Counter under each body `−
 Header right slot: `FilterInput` (260px, placeholder `Filter`, `Ctrl` `F` keycaps inside on
 the right when empty, clear ×) and ghost `Clear all`.
 
-`HistoryRow` (list inside a Box, hairline dividers, padding `14px 16px`, hover `--bg-2` with
-`--r-2` on the row, focus ring inside):
+`HistoryRow` (plain list, **no Box**: hairline dividers only, padding `14px 16px`, hover
+`--bg-2` with `--r-2` on the row, focus ring inside):
 
 ```
  So I think we should ship it on Friday.                                   2 min ago
@@ -534,8 +607,9 @@ the right when empty, clear ×) and ghost `Clear all`.
 
 - Line 1: cleaned `text`, Inter `--fs-md` `--text-0`, clamp 2 lines; Enter toggles full text.
 - Line 2 (meta row, `--fs-sm` `--text-2`, margin-top 6): removed-count (`−4 fillers` /
-  `Edited`, only when `raw` exists) and a `Raw` toggle (ghost xs button, `--r-1`,
-  `aria-pressed`) revealing the raw transcript underneath in a `--bg-0` block, `1px solid
+  `Edited`, only when `raw` exists) and a `Raw` toggle rendered as a **chip** (Badge `muted`
+  look: `--fs-xs` 500, padding `2px 8px`, `--r-1`, bg `--bg-2`; `aria-pressed="true"` → Badge
+  `accent` look) revealing the raw transcript underneath in a `--bg-0` block, `1px solid
   --line`, `--r-2`, mono `--fs-sm` `--text-1`, padding 10px 12px, heading `Raw` `--fs-xs`
   `--text-2`. `R` key on a focused row toggles it.
 - Timestamp `--fs-xs` 500 `--text-2`, sentence case: `Just now`, `4 min ago`, `2 h ago`,
@@ -588,7 +662,7 @@ React name → CSS class (kebab). Sizes are fixed; deviation is drift.
 
 | Component | Spec |
 | --- | --- |
-| `Button` | height **36**, padding `0 14px`, `--r-2`, Inter `--fs-md` 500, min-width 72, gap 8 with icon. `primary`: bg `--accent-fill`, text `--accent-text`, no border; hover `filter: brightness(.94)`; active `.88`. `secondary`: bg `--bg-0` (dark) / `#FFFFFF` (light), border 1px `--line`, text `--text-0`; hover border `--line-strong` bg `--bg-2`. `ghost`: no border, transparent, text `--text-1`; hover text `--text-0` bg `--bg-2`. `danger`: transparent, border 1px `--err`, text `--err`; hover bg `--err` text `#FFFFFF`. `icon`: 28×28 ghost, `--r-1`. `xs`: height 28, padding `0 10px`, `--fs-sm`. Disabled: 45% opacity, no hover. Loading: `Stepper` replaces the icon. Transition `background-color, border-color, color, filter` `--dur-1`. |
+| `Button` | height **36**, padding `0 14px`, `--r-2`, Inter `--fs-md` 500, min-width 72, gap 8 with icon. `primary`: bg `--accent-fill`, text `--accent-text`, no border; hover `filter: brightness(.94)`; active `.88`. `secondary`: bg `--bg-0` (dark) / `#FFFFFF` (light), border 1px `--line`, text `--text-0`; hover border `--line-strong` bg `--bg-2`. `ghost`: no border, transparent, text `--text-1`; hover text `--text-0` bg `--bg-2`. `danger`: transparent, border 1px `--err`, text `--err`; hover bg `--err` text `#FFFFFF`. `icon`: 28×28 ghost, `--r-1`. `xs`: height 28, padding `0 10px`, `--fs-sm`. Disabled: `secondary`/`ghost`/`danger` at 45% opacity, no hover; **`primary` disabled is bg `--accent-soft`, text `--text-2`, opacity 1, no filter** (translucent lime reads as olive). Loading: `Stepper` replaces the icon. Transition `background-color, border-color, color, filter` `--dur-1`. |
 | `Input` / `Textarea` | height **36** (textarea auto, min 96), padding `0 12px`, bg `--bg-0` (dark) / `#FFFFFF` (light), border 1px `--line`, `--r-2`, Inter `--fs-md`; `.input--mono` uses mono `--fs-sm`. Hover border `--line-strong`; focus border `--accent` + focus ring; invalid border `--err`; placeholder `--text-2`. |
 | `Segmented` | `role=radiogroup`; track bg `--bg-2`, `--r-full`, padding 3px, height **34**; options are 28px buttons, `--r-full`, padding `0 14px`, Inter `--fs-md` 500 `--text-1`, no borders. Selected: bg `--bg-0` (dark) / `#FFFFFF` (light), text `--text-0`, plus `box-shadow: 0 1px 2px rgba(0,0,0,.25)` in dark / `.10` light (allowed: it is the one place a raised chip needs it — implement as `--shadow-chip` token). Hover unselected: text `--text-0`. |
 | `Toggle` | `<button role=switch>` **40×22**, `--r-full`, no border. Off: track `--bg-3`, knob 18×18 `--r-full` `--text-1` inset 2px. On: track `--accent-fill`, knob `--accent-text`. Knob slides 18px in `--dur-1 --ease-out`. |
@@ -637,7 +711,7 @@ width`. Never `transition: all`. Every interactive element ≥ 28×28 hit area, 
 | `src/sections/About.tsx` | §3.9 `Dictionary` row. |
 | `src/App.tsx` | seven sections, `Ctrl+1..7`, section order General, Transcription, Cleanup, Dictionary, Playground, History, About. |
 | `src/lib/ipc.ts` | schema additions: `pasteLastHotkey: string`, `dictionary: {from,to}[]`, `sounds: boolean`. |
-| `src-tauri/tauri.conf.json`, `src-tauri/src/dictation.rs` | pill window 440 × 220; position rule §2.1. |
+| `src-tauri/tauri.conf.json`, `src-tauri/src/dictation.rs` | pill window 440 × 240; position rule §2.1. |
 
 Demo: keep the `?state=` support in `pill.tsx` and add `?state=recording&warmup=1` (never
 receives a level), `?state=done&long=1` (a 6-line sample text to verify the 4-line clamp),
@@ -652,35 +726,44 @@ levels from the bundled clip via the existing mock path (docs/ASSETS.md).
    letter-spaced labels anywhere except the `EN` badge; no Archivo, no condensed type.
 2. The pill is a full-radius capsule 360 × 56 in every state (it never grows), opaque
    `#161618` dark / `#FFFFFF` light, 1px edge, one soft shadow beneath it.
-3. Pill label text is 16px Inter 500 and readable from arm's length: `Listening…`, `00:04`,
-   `Transcribing…`, `Cleaning up…`, `Pasted`, `Copied`, `Error`.
-4. Recording before audio: three pulsing dots and `Listening…`; the moment audio arrives the
-   dots crossfade into the waveform and the label becomes the timer.
-5. Waveform: 3px rounded bars, 2px gaps, ~42 bars, mirrored around the center, 4px dots in
-   silence, bars slide continuously left; speech clearly moves it (peaks reach 20–28px), pauses
-   decay in ~100ms, it is unmistakably live audio.
+3. Pill label text is 16px Inter 500 and readable from arm's length: `Listening`, `00:04`,
+   `Transcribing…`, `Cleaning up…`, `Pasted`, `Copied`.
+4. Recording before audio: `Listening` (no ellipsis) and three pulsing dots; the moment audio
+   arrives the dots crossfade into the waveform and the label becomes the timer.
+5. Waveform: 3px rounded bars, 3px gaps, ~35 bars, mirrored around the center, a 3px dotted
+   line in silence, bars slide continuously left; speech has visible dynamics (peaks 16–26px,
+   valleys 6–10px between syllables), never a solid comb of full-height bars.
 6. Push-to-talk dot pulses softly (no hard blink); hands-free dot is steady.
-7. Transcribing/cleaning: hollow accent ring, sentence-case label, 48px accent segment on a
-   4px rounded track.
+7. Transcribing/cleaning: hollow accent ring, sentence-case label, an accent segment 40% of
+   the track (~80px) sweeping a 4px rounded track — not a dot.
 8. Done: a rounded bubble (r=18, same surface and shadow as the pill) floats 10px above the
-   pill, centered, ≤ 400px wide, transcript at 16px wrapping to ≤ 4 lines with an ellipsis,
-   footer `−N fillers` left and `Click to copy` right; it pops in with a small overshoot 60ms
-   after the pill turns `Pasted`.
+   pill, centered, **≤ 360px wide (never wider than the pill)**, transcript at 16px wrapping
+   to ≤ 4 lines with an ellipsis and its top never clipped, footer `−N fillers` left and
+   `Click to copy` right; the pill below reads only `● Pasted` with nothing on the right; it
+   pops in with a small overshoot 60ms after the pill turns `Pasted`.
 9. Hovering the bubble keeps it on screen; clicking it copies and both the footer and the
    pill label read `Copied` for a second.
 10. Paste-last flash shows the bubble with the text and no fillers note.
-11. Error: red dot, `Error`, message in 15px, `Open VoxFlow` at the right; gone after 3.5s.
-12. Pill window is 440 × 220 with nothing visible outside the capsule and bubble; the pill
+11. Error: red dot, then the message in 15px filling the slot (`Microphone not responding`
+    fits without truncation), `Open VoxFlow` at the right, no `Error` word; gone after 3.5s.
+12. Pill window is 440 × 240 with nothing visible outside the capsule and bubble; the pill
     bottom sits 24px above the taskbar.
 13. Settings sidebar: `VoxFlow` wordmark in sentence case, numbered nav 1–7 with rounded
-    `--bg-2` active fill and lime index, tools block, footer status `Idle` with a round dot.
+    `--bg-2` active fill and lime index, tools block, footer status dot on the same line as
+    `Idle` with the keycaps aligned under the word.
 14. Boxes are `--bg-1` cards with r=14, a 13px muted heading inside (not on the border), and
     hairline field dividers; buttons/inputs are 36px tall with r=10; toggles are 40×22 pills;
     the segmented control is a pill track with a raised selected chip.
-15. General shows `Paste last transcript` with `Alt` `Shift` `Z` caps and a `Clear` button
-    (or `Off` badge + `Set` when cleared), and a `Sound cues` toggle under Output.
+15. General shows `Paste last transcript` in a recorder the same 380px width as the dictation
+    one, with `Alt` `Shift` `Z` caps and `Change · Clear` inside it (or `Off` badge + `Set`
+    when cleared), and a `Sound cues` toggle under Output. Field helpers wrap to ≤ 2 lines.
 16. Dictionary is section 4 (Ctrl+4): add row `Heard as → Write [Add]`, `N of 200` counter,
-    editable rows with a trash icon on hover, empty state with `No entries yet`.
+    editable rows with a trash icon on hover, empty state with `No entries yet`; the arrow in
+    the add row and the arrows in the list rows are on the same x. Disabled `Add` is a dim
+    lime-tinted chip with gray text, not olive.
+21. Transcription has a subtitle and its `Backend` control sits in a Box like every other
+    field; History's `Raw` toggle is a chip; the sweep and progress bar never show a dot-sized
+    segment.
 17. Cleanup shows `Dictionary replacements run before cleanup. Open dictionary` under the AI
     provider heading.
 18. Light theme: white surfaces, `#3E6B00` accent for text/ring, lime fills with black text,
