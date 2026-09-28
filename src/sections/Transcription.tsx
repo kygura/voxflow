@@ -55,19 +55,23 @@ export function Transcription({
     <>
       <SectionHeader
         title="Transcription"
+        subtitle="Where speech is turned into text."
         right={saved ? <span className="saved-flash">Saved</span> : undefined}
       />
-      <Field label="Backend">
-        <Segmented
-          name="Backend"
-          value={settings.backend}
-          onChange={(v) => save({ backend: v })}
-          options={[
-            { value: "local", label: "Local" },
-            { value: "remote", label: "Server" },
-          ]}
-        />
-      </Field>
+      <Card>
+        <CardTitle>Backend</CardTitle>
+        <Field label="Backend">
+          <Segmented
+            name="Backend"
+            value={settings.backend}
+            onChange={(v) => save({ backend: v })}
+            options={[
+              { value: "local", label: "Local" },
+              { value: "remote", label: "Server" },
+            ]}
+          />
+        </Field>
+      </Card>
       {settings.backend === "local" ? (
         <LocalPanel settings={settings} onSave={save} />
       ) : (

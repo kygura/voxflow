@@ -436,19 +436,16 @@ export function ProgressBar({
   );
 }
 
-/** DESIGN.md §2.6 sweep: a moving accent segment over a track; reduced motion
- * swaps to a 3-block stepper. Used by the pill (transcribing/cleaning) and
- * ProgressBar's indeterminate state. */
+/** DESIGN.md §2.8 sweep: a moving accent segment over a track (percentage
+ * `left: -40% → 100%`, so it renders the same regardless of track width);
+ * reduced motion swaps to a 3-block stepper. Used by the pill
+ * (transcribing/cleaning) and ProgressBar's indeterminate state. */
 export function Sweep({ width }: { width?: number }) {
   // No explicit width: the track fills its flex slot via CSS (.sweep is
-  // width: 100%) and the travel distance is computed the same way, so the
-  // pill's content slot and this component never disagree about the width.
-  const style = width
-    ? ({ width, ["--sweep-travel" as string]: `${width - 48}px` } as React.CSSProperties)
-    : ({ ["--sweep-travel" as string]: "calc(100cqw - 48px)" } as React.CSSProperties);
+  // width: 100%).
+  const style = width ? { width } : undefined;
   return (
     <div className="sweep" style={style}>
-
       <span className="sweep-segment" />
       <span className="sweep-reduced" aria-hidden="true">
         <span className="sweep-reduced-block" />

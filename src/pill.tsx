@@ -276,7 +276,7 @@ function Pill() {
 
         <span className="pill-label" data-tone={isDone ? "accent" : isError ? "err" : undefined}>
           {isWarmup
-            ? "Listening…"
+            ? "Listening"
             : isRecording
               ? timerText
               : isTranscribing
@@ -285,16 +285,14 @@ function Pill() {
                   ? "Cleaning up…"
                   : isDone
                     ? doneLabel
-                    : isError
-                      ? "Error"
-                      : ""}
+                    : ""}
         </span>
 
         <div className="pill-content" key={`${state}${isWarmup ? "-warmup" : ""}`}>
           {isWarmup && <WarmupDots />}
           {isRecording && !isWarmup && <Waveform levelRef={levelRef} reducedMotion={reducedMotion} />}
           {(isTranscribing || isCleaning) && <Sweep />}
-          {isError && <span className="pill-error-text">{ellipsize(message ?? "Something went wrong", 56)}</span>}
+          {isError && <span className="pill-error-text">{ellipsize(message ?? "Something went wrong", 44)}</span>}
           <span role="status" aria-live="polite" className="sr-only">
             {srText}
           </span>
@@ -312,7 +310,7 @@ function Pill() {
             <span className="pill-cap-inner">Esc</span>
           </button>
         )}
-        {isDone && note && <span className={`pill-note${note.err ? " pill-note--err" : ""}`}>{note.label}</span>}
+        {/* DESIGN.md Round 2 #3: the done note lives in the bubble footer only. */}
         {isError && <span className="pill-note pill-note--muted">Open VoxFlow</span>}
       </div>
 

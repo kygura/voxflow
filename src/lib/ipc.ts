@@ -19,9 +19,16 @@ export type CleanupMode = z.infer<typeof CleanupModeSchema>;
 
 // SPEC.md v3: whole-word, case-insensitive `from` → `to`; `from` non-empty ≤100
 // chars, `to` ≤100 chars (may be empty — that means "delete the word").
+// Rust counts `.chars().count()` (Unicode scalars); zod's `.max()` counts
+// UTF-16 code units, which double-counts astral-plane emoji. Count code
+// points via spread to match the Rust-side limit.
+const codePointCount = (s: string) => [...s].length;
 export const DictEntrySchema = z.object({
-  from: z.string().min(1).max(100),
-  to: z.string().max(100),
+  from: z
+    .string()
+    .min(1)
+    .refine((s) => codePointCount(s) <= 100, { message: "String must contain at most 100 character(s)" }),
+  to: z.string().refine((s) => codePointCount(s) <= 100, { message: "String must contain at most 100 character(s)" }),
 });
 export type DictEntry = z.infer<typeof DictEntrySchema>;
 

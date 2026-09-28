@@ -51,6 +51,17 @@ describe("SPEC-shaped payloads", () => {
     expect(DictEntrySchema.parse({ from: "vox flow", to: "" })).toBeTruthy();
   });
 
+  test("DictEntry counts code points, not UTF-16 units (matches Rust chars().count())", () => {
+    // Each emoji below is an astral-plane code point: 1 Rust char, but 2 UTF-16
+    // units — `.length` would double-count and reject 100 emoji as too long.
+    const hundredEmoji = "🎉".repeat(100);
+    expect(hundredEmoji.length).toBe(200);
+    expect(DictEntrySchema.parse({ from: hundredEmoji, to: hundredEmoji })).toBeTruthy();
+    expect(() =>
+      DictEntrySchema.parse({ from: "🎉".repeat(101), to: "x" }),
+    ).toThrow();
+  });
+
   test("ModelInfo accepts / rejects", () => {
     expect(
       ModelInfoSchema.parse({ name: "base", sizeMb: 142, englishOnly: false, downloaded: true }),

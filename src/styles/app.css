@@ -149,9 +149,10 @@ textarea {
 }
 
 .sidebar-footer {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-3);
+  display: grid;
+  grid-template-columns: 8px 1fr;
+  column-gap: 10px;
+  align-items: start;
   padding: var(--sp-5);
   border-top: var(--bw) solid var(--line);
 }
@@ -174,6 +175,7 @@ textarea {
   flex: none;
   border-radius: var(--r-full);
   background: var(--text-2);
+  margin-top: 6px;
 }
 
 .status-dot--recording {
@@ -286,7 +288,7 @@ textarea {
 }
 
 .field-label-col {
-  width: 240px;
+  width: 300px;
   flex: none;
 }
 
@@ -357,6 +359,14 @@ textarea {
 
 .btn--primary:active {
   filter: brightness(0.88);
+}
+
+.btn--primary:disabled {
+  opacity: 1;
+  background: var(--accent-soft);
+  border-color: var(--accent-soft);
+  color: var(--text-2);
+  filter: none;
 }
 
 .btn--secondary {
@@ -648,18 +658,12 @@ textarea {
 /* --- HotkeyRecorder --- */
 
 .hotkey-recorder-wrap {
-  flex: 1;
-  min-width: 220px;
-}
-
-.hotkey-recorder-row {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-3);
+  flex: none;
+  width: 380px;
 }
 
 .hotkey-recorder {
-  flex: 1;
+  width: 100%;
   height: 36px;
   border-radius: var(--r-2);
   border: var(--bw) solid var(--line);
@@ -694,14 +698,27 @@ textarea {
   font-size: var(--fs-sm);
 }
 
+.hotkey-recorder-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .hotkey-recorder-action {
   color: var(--accent);
   font-size: var(--fs-sm);
   font-weight: 500;
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+  cursor: pointer;
 }
 
-.hotkey-recorder-clear {
-  flex: none;
+.hotkey-recorder-sep {
+  color: var(--text-2);
+  font-size: var(--fs-sm);
 }
 
 /* --- Badge --- */
@@ -734,6 +751,11 @@ textarea {
   text-transform: uppercase;
 }
 
+.history-raw-chip {
+  border: none;
+  cursor: pointer;
+}
+
 /* --- ProgressBar --- */
 
 .progress-bar {
@@ -759,26 +781,25 @@ textarea {
   background: var(--line);
   border-radius: var(--r-full);
   overflow: hidden;
-  container-type: inline-size;
 }
 
 .sweep-segment {
   position: absolute;
   top: 0;
-  left: 0;
-  width: 48px;
+  left: -40%;
+  width: 40%;
   height: 4px;
   border-radius: var(--r-full);
   background: var(--accent);
-  animation: sweep-move 1100ms var(--ease-lin) infinite;
+  animation: sweep-move 1200ms var(--ease-lin) infinite;
 }
 
 @keyframes sweep-move {
   from {
-    transform: translateX(0);
+    left: -40%;
   }
   to {
-    transform: translateX(var(--sweep-travel, 80px));
+    left: 100%;
   }
 }
 
@@ -1300,15 +1321,20 @@ textarea {
 
 .dict-add {
   display: grid;
-  grid-template-columns: 1fr 24px 1fr auto;
+  grid-template-columns: 1fr 24px 1fr 88px;
   gap: 8px;
   align-items: center;
+  padding: 0 16px;
   margin-bottom: 4px;
 }
 
 .dict-add svg {
   color: var(--text-2);
   justify-self: center;
+}
+
+.dict-add .btn--primary {
+  width: 88px;
 }
 
 .dict-add-error {
@@ -1337,7 +1363,7 @@ textarea {
 .dict-row {
   height: 48px;
   display: grid;
-  grid-template-columns: 1fr 24px 1fr 32px;
+  grid-template-columns: 1fr 24px 1fr 88px;
   align-items: center;
   gap: 8px;
   border-top: var(--bw) solid var(--line);
@@ -1390,6 +1416,7 @@ textarea {
 
 .dict-row .btn--icon {
   opacity: 0;
+  justify-self: end;
 }
 
 .dict-row:hover .btn--icon,

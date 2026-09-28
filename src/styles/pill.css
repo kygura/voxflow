@@ -207,6 +207,17 @@ body {
   font-weight: 600;
 }
 
+/* DESIGN.md Round 2 #4: no `Error` label word — the red dot carries the
+   state, and the message gets the whole content slot starting 12px after
+   the dot. */
+.pill-body[data-state="error"] .pill-label {
+  display: none;
+}
+
+.pill-body[data-state="error"] .pill-dot {
+  margin-right: 12px;
+}
+
 /* --- Content slot: warm-up dots / waveform / sweep / error text --- */
 
 .pill-content {
@@ -248,12 +259,13 @@ body {
 .warmup {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
+  margin-left: 4px;
 }
 
 .warmup-dot {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
   border-radius: var(--r-full);
   background: var(--text-1);
   opacity: 0.35;
@@ -358,7 +370,7 @@ body {
   position: absolute;
   left: 50%;
   bottom: 78px;
-  max-width: 400px;
+  max-width: 360px;
   min-width: 240px;
   width: max-content;
   background: var(--pill-bg);
@@ -441,7 +453,7 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-top: 8px;
+  margin-top: 10px;
   font-family: var(--font-sans);
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
@@ -465,28 +477,25 @@ body {
   background: var(--line);
   border-radius: var(--r-full);
   overflow: hidden;
-  /* Container query unit so --sweep-travel's calc() resolves against the
-     track's own width, not the animated 48px segment. */
-  container-type: inline-size;
 }
 
 .sweep-segment {
   position: absolute;
   top: 0;
-  left: 0;
-  width: 48px;
+  left: -40%;
+  width: 40%;
   height: 4px;
   border-radius: var(--r-full);
   background: var(--accent);
-  animation: sweep-move 1100ms var(--ease-lin) infinite;
+  animation: sweep-move 1200ms var(--ease-lin) infinite;
 }
 
 @keyframes sweep-move {
   from {
-    transform: translateX(0);
+    left: -40%;
   }
   to {
-    transform: translateX(var(--sweep-travel, 80px));
+    left: 100%;
   }
 }
 

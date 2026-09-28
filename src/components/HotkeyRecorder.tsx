@@ -1,7 +1,7 @@
 // DESIGN.md §3.3 — captures a key combo and converts it to an accelerator.
 import { useEffect, useRef, useState } from "react";
 import { toAccelerator } from "../lib/accelerator";
-import { Badge, Button, KeyCombo } from "./ui";
+import { Badge, KeyCombo } from "./ui";
 
 type Phase = "idle" | "listening" | "flash-ok" | "invalid";
 
@@ -78,37 +78,59 @@ export function HotkeyRecorder({
   };
 
   const isEmpty = allowEmpty && value === "" && phase === "idle";
+  // DESIGN.md Round 2 #9: with allowEmpty and a value set, Clear is a second
+  // text action inside the box, after Change (`Change · Clear`).
+  const showClear = allowEmpty && !isEmpty && phase === "idle";
 
   return (
     <div className="hotkey-recorder-wrap">
-      <div className="hotkey-recorder-row">
-        <button
-          type="button"
-          className={`hotkey-recorder hotkey-recorder--${phase}${isEmpty ? " hotkey-recorder--empty" : ""}`}
-          onClick={() => (phase === "idle" ? start() : undefined)}
-          onBlur={() => phase === "listening" && setPhase("idle")}
-          aria-live="polite"
-        >
-          {phase === "listening" ? (
-            liveMods.length ? (
-              <KeyCombo combo={liveMods.join("+")} muted />
-            ) : (
-              <span className="hotkey-recorder-hint">Press keys…</span>
-            )
-          ) : isEmpty ? (
-            <Badge tone="muted">Off</Badge>
+      <div
+        role="button"
+        tabIndex={0}
+        className={`hotkey-recorder hotkey-recorder--${phase}${isEmpty ? " hotkey-recorder--empty" : ""}`}
+        onClick={() => (phase === "idle" ? start() : undefined)}
+        onKeyDown={(e) => {
+          if (phase === "idle" && (e.key === "Enter" || e.key === " ")) {
+            e.preventDefault();
+            start();
+          }
+        }}
+        onBlur={() => phase === "listening" && setPhase("idle")}
+        aria-live="polite"
+      >
+        {phase === "listening" ? (
+          liveMods.length ? (
+            <KeyCombo combo={liveMods.join("+")} muted />
           ) : (
-            <KeyCombo combo={value} />
-          )}
+            <span className="hotkey-recorder-hint">Press keys…</span>
+          )
+        ) : isEmpty ? (
+          <Badge tone="muted">Off</Badge>
+        ) : (
+          <KeyCombo combo={value} />
+        )}
+        <span className="hotkey-recorder-actions">
           <span className="hotkey-recorder-action">
             {phase === "listening" ? "Esc to cancel" : isEmpty ? "Set" : "Change"}
           </span>
-        </button>
-        {allowEmpty && !isEmpty && phase === "idle" && (
-          <Button variant="ghost" className="hotkey-recorder-clear" onClick={onClear}>
-            Clear
-          </Button>
-        )}
+          {showClear && (
+            <>
+              <span className="hotkey-recorder-sep" aria-hidden="true">
+                ·
+              </span>
+              <button
+                type="button"
+                className="hotkey-recorder-action hotkey-recorder-action--clear"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onClear?.();
+                }}
+              >
+                Clear
+              </button>
+            </>
+          )}
+        </span>
       </div>
       {phase === "invalid" && error && <p className="field-helper field-helper--error">{error}</p>}
     </div>

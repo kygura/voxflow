@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 
 const BAR_W = 3;
-const BAR_GAP = 2;
+const BAR_GAP = 3;
 const PITCH = BAR_W + BAR_GAP; // 5px
 const SLOT_H = 28;
 // ponytail: level is already dB-mapped 0..1; raise GAIN only if real speech peaks under 0.6
@@ -94,7 +94,7 @@ export function Waveform({
         // The rightmost (newest) bar tracks the live envelope, not the last pushed sample.
         const sample = i === n - 1 ? env : ring[i];
         const clamped = Math.min(1, Math.max(0, sample));
-        const h = 4 + 24 * Math.sqrt(clamped);
+        const h = 3 + 25 * Math.pow(clamped, 1.5);
         drawBar(i * PITCH + offset, h);
       }
 

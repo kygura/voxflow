@@ -233,7 +233,7 @@ function HistoryRow({
         {entry.raw && (
           <button
             type="button"
-            className="btn btn--ghost btn--xs"
+            className={`badge badge--${rawOpen ? "accent" : "muted"} history-raw-chip`}
             aria-pressed={rawOpen}
             onClick={(e) => {
               e.stopPropagation();
