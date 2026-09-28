@@ -9,7 +9,13 @@ use std::time::{Duration, Instant};
 pub const MIN_SAMPLES: usize = 4_800;
 /// Audio beyond this is dropped; the shell auto-stops using [`Recorder::elapsed`].
 pub const MAX_DURATION: Duration = Duration::from_secs(600);
-const LEVEL_INTERVAL: Duration = Duration::from_millis(33);
+/// Level meter block: one `on_level` value per 25 ms of real input (40 Hz).
+pub const LEVEL_BLOCK_MS: u64 = 25;
+/// Bundled 5.6 s English speech clip (mp3) for the overlay demo; source and license in
+/// docs/ASSETS.md. It says [`DEMO_CLIP_TEXT`].
+pub const DEMO_CLIP: &[u8] = include_bytes!("../assets/demo_speech.mp3");
+pub const DEMO_CLIP_TEXT: &str =
+    "The work wasn't finished at 11:00 p.m. Friday, so they decided to carry it over to the following Monday.";
 
 /// Names of available input devices (for the settings picker).
 pub fn list_input_devices() -> Result<Vec<String>> {
@@ -34,10 +40,67 @@ fn rms(s: &[f32]) -> f32 {
     (s.iter().map(|x| x * x).sum::<f32>() / s.len() as f32).sqrt()
 }
 
-/// Map RMS to 0..1 on a dBFS scale (-60 dB → 0, 0 dB → 1). Loudness is perceived
-/// logarithmically; a linear map leaves the pill waveform flat for normal speech (~-30 dBFS).
-fn level(rms: f32) -> f32 {
-    ((20.0 * rms.max(1e-9).log10() + 60.0) / 60.0).clamp(0.0, 1.0)
+/// Perceptual 0..1 level of one block of samples: RMS in dBFS mapped linearly from -55 dB (0)
+/// to 0 dB (1), then a slight gamma (0.8) so normal speech (~-30 dBFS → 0.53) fills the range.
+/// Loudness is perceived logarithmically; a linear map would leave the waveform flat.
+pub fn level(block: &[f32]) -> f32 {
+    let db = 20.0 * rms(block).max(1e-9).log10();
+    ((db + 55.0) / 55.0).clamp(0.0, 1.0).powf(0.8)
+}
+
+/// [`level`] per [`LEVEL_BLOCK_MS`] block of 16 kHz mono audio.
+pub fn envelope(samples: &[f32]) -> Vec<f32> {
+    samples.chunks(16 * LEVEL_BLOCK_MS as usize).map(level).collect()
+}
+
+/// Play 16 kHz mono audio on the default output device, on its own thread (a cpal `Stream`
+/// is `!Send`). Dropping the returned sender stops it. No output device: skipped silently.
+pub fn play(samples: Vec<f32>) -> mpsc::Sender<()> {
+    let (tx, rx) = mpsc::channel::<()>();
+    let len = Duration::from_millis(samples.len() as u64 / 16 + 300);
+    let _ = std::thread::Builder::new()
+        .name("voxflow-play".into())
+        .spawn(move || match open_output(samples) {
+            Ok(_stream) => drop(rx.recv_timeout(len)), // Err(Disconnected) = sender dropped = stop
+            Err(e) => eprintln!("voxflow: audio playback skipped: {e:#}"),
+        });
+    tx
+}
+
+fn open_output(samples: Vec<f32>) -> Result<cpal::Stream> {
+    let device = cpal::default_host()
+        .default_output_device()
+        .context("no output device")?;
+    let config = device.default_output_config()?;
+    let ch = config.channels() as usize;
+    let mono = crate::resample::to_mono(&samples, 1, 16_000, config.sample_rate());
+    let cfg = config.config();
+    let stream = match config.sample_format() {
+        cpal::SampleFormat::F32 => output::<f32>(&device, cfg, mono, ch),
+        cpal::SampleFormat::I16 => output::<i16>(&device, cfg, mono, ch),
+        cpal::SampleFormat::I32 => output::<i32>(&device, cfg, mono, ch),
+        cpal::SampleFormat::U16 => output::<u16>(&device, cfg, mono, ch),
+        f => return Err(anyhow!("unsupported output sample format {f:?}")),
+    }?;
+    stream.play()?;
+    Ok(stream)
+}
+
+fn output<T>(device: &cpal::Device, cfg: cpal::StreamConfig, mono: Vec<f32>, ch: usize) -> Result<cpal::Stream>
+where
+    T: SizedSample + FromSample<f32>,
+{
+    let mut it = mono.into_iter();
+    Ok(device.build_output_stream(
+        cfg,
+        move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
+            for frame in data.chunks_mut(ch.max(1)) {
+                frame.fill(T::from_sample(it.next().unwrap_or(0.0)));
+            }
+        },
+        |e| eprintln!("voxflow: audio output error: {e}"),
+        None,
+    )?)
 }
 
 /// Live microphone capture. The cpal `Stream` (which is `!Send` on some backends) lives on
@@ -127,9 +190,8 @@ fn open_stream(name: Option<&str>, on_level: Box<dyn Fn(f32) + Send>) -> Result<
         buf: buf.clone(),
         cap,
         on_level,
-        sum_sq: 0.0,
-        n: 0,
-        last: Instant::now(),
+        block: Vec::new(),
+        block_len: (rate as usize * channels as usize * LEVEL_BLOCK_MS as usize / 1000).max(1),
     };
     let cfg = config.config();
     let stream = match config.sample_format() {
@@ -153,9 +215,9 @@ struct Sink {
     buf: Arc<Mutex<Vec<f32>>>,
     cap: usize,
     on_level: Box<dyn Fn(f32) + Send>,
-    sum_sq: f32,
-    n: usize,
-    last: Instant,
+    /// Current level block (interleaved samples); emitted and cleared every `block_len`.
+    block: Vec<f32>,
+    block_len: usize,
 }
 
 fn build<T>(device: &cpal::Device, cfg: cpal::StreamConfig, mut sink: Sink) -> Result<cpal::Stream>
@@ -172,15 +234,11 @@ where
                 buf.extend(data.iter().take(room).map(|&s| f32::from_sample(s)));
             }
             for &s in data {
-                let v = f32::from_sample(s);
-                sink.sum_sq += v * v;
-            }
-            sink.n += data.len();
-            if sink.last.elapsed() >= LEVEL_INTERVAL && sink.n > 0 {
-                (sink.on_level)(level((sink.sum_sq / sink.n as f32).sqrt()));
-                sink.sum_sq = 0.0;
-                sink.n = 0;
-                sink.last = Instant::now();
+                sink.block.push(f32::from_sample(s));
+                if sink.block.len() >= sink.block_len {
+                    (sink.on_level)(level(&sink.block));
+                    sink.block.clear();
+                }
             }
         },
         |e| eprintln!("voxflow: audio stream error: {e}"),
@@ -205,11 +263,33 @@ mod tests {
     }
 
     #[test]
-    fn level_mapping() {
-        assert_eq!(level(0.0), 0.0);
-        assert_eq!(level(1.0), 1.0);
-        assert!((level(0.001) - 0.0).abs() < 1e-5); // -60 dBFS
-        assert!((level(0.031_622_8) - 0.5).abs() < 1e-3); // -30 dBFS
+    fn block_level_on_sine_and_silence() {
+        let sine = |amp: f32| -> Vec<f32> {
+            (0..400).map(|i| amp * (i as f32 * std::f32::consts::TAU * 440.0 / 16_000.0).sin()).collect()
+        };
+        assert_eq!(level(&[0.0; 400]), 0.0);
+        assert_eq!(level(&[]), 0.0);
+        assert_eq!(level(&[1.0; 400]), 1.0); // 0 dBFS
+        assert_eq!(level(&[0.001_778; 400]), 0.0); // -55 dBFS floor
+        // Full-scale sine: RMS -3 dBFS → (52/55)^0.8.
+        assert!((level(&sine(1.0)) - (52.0f32 / 55.0).powf(0.8)).abs() < 0.01);
+        // -30 dBFS RMS (typical speech) lands mid-range.
+        let l = level(&sine(0.031_62 * 2f32.sqrt()));
+        assert!((l - (25.0f32 / 55.0).powf(0.8)).abs() < 0.01, "{l}");
+        assert_eq!(envelope(&vec![0.0; 16_000]).len(), 40); // 1 s = 40 blocks
+    }
+
+    #[test]
+    fn demo_clip_envelope_is_speech_like() {
+        let env = envelope(&crate::decode::decode_bytes(DEMO_CLIP, "mp3").unwrap());
+        let secs = env.len() as f32 * LEVEL_BLOCK_MS as f32 / 1000.0;
+        assert!((4.0..=8.0).contains(&secs), "{secs} s");
+        let first = env.iter().position(|l| *l > 0.5).unwrap();
+        let last = env.iter().rposition(|l| *l > 0.5).unwrap();
+        let peaks = env.iter().filter(|l| **l > 0.5).count();
+        // Pauses *inside* the speech, not just leading/trailing silence.
+        let gaps = env[first..last].iter().filter(|l| **l < 0.2).count();
+        assert!(peaks > env.len() / 3 && gaps >= 2, "peaks {peaks} gaps {gaps} of {}", env.len());
     }
 
     #[test]

@@ -4,8 +4,13 @@
 /// below 8 kHz and Whisper is robust to the resulting aliasing (see RESEARCH.md §6);
 /// swap in rubato only if WER measurably suffers.
 pub fn to_16k_mono(interleaved: &[f32], channels: u16, rate: u32) -> Vec<f32> {
-    const OUT_RATE: u64 = 16_000;
-    if channels == 0 || rate == 0 {
+    to_mono(interleaved, channels, rate, 16_000)
+}
+
+/// [`to_16k_mono`] with any output rate (demo clip playback at the device rate).
+pub fn to_mono(interleaved: &[f32], channels: u16, rate: u32, out_rate: u32) -> Vec<f32> {
+    let out_rate = out_rate as u64;
+    if channels == 0 || rate == 0 || out_rate == 0 {
         return Vec::new();
     }
     let ch = channels as usize;
@@ -13,11 +18,11 @@ pub fn to_16k_mono(interleaved: &[f32], channels: u16, rate: u32) -> Vec<f32> {
         .chunks_exact(ch)
         .map(|frame| frame.iter().sum::<f32>() / ch as f32)
         .collect();
-    if rate as u64 == OUT_RATE || mono.is_empty() {
+    if rate as u64 == out_rate || mono.is_empty() {
         return mono;
     }
-    let out_len = (mono.len() as u64 * OUT_RATE / rate as u64) as usize;
-    let step = rate as f64 / OUT_RATE as f64;
+    let out_len = (mono.len() as u64 * out_rate / rate as u64) as usize;
+    let step = rate as f64 / out_rate as f64;
     let last = mono.len() - 1;
     (0..out_len)
         .map(|i| {

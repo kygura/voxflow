@@ -6,7 +6,7 @@ use symphonia::core::codecs::audio::AudioDecoderOptions;
 use symphonia::core::errors::Error;
 use symphonia::core::formats::probe::Hint;
 use symphonia::core::formats::{FormatOptions, TrackType};
-use symphonia::core::io::MediaSourceStream;
+use symphonia::core::io::{MediaSource, MediaSourceStream};
 use symphonia::core::meta::MetadataOptions;
 
 /// Longest file accepted, in seconds (same cap as a recording).
@@ -17,9 +17,18 @@ const MAX_RATE: u32 = 384_000;
 /// Decode wav/mp3/m4a(aac)/ogg(vorbis)/flac to 16 kHz mono f32.
 pub fn decode_file(path: &Path) -> Result<Vec<f32>> {
     let file = std::fs::File::open(path).with_context(|| format!("open {}", path.display()))?;
-    let mss = MediaSourceStream::new(Box::new(file), Default::default());
+    decode(Box::new(file), path.extension().and_then(|e| e.to_str()))
+}
+
+/// [`decode_file`] for in-memory audio (e.g. an `include_bytes!` asset).
+pub fn decode_bytes(bytes: &'static [u8], ext: &str) -> Result<Vec<f32>> {
+    decode(Box::new(std::io::Cursor::new(bytes)), Some(ext))
+}
+
+fn decode(source: Box<dyn MediaSource>, ext: Option<&str>) -> Result<Vec<f32>> {
+    let mss = MediaSourceStream::new(source, Default::default());
     let mut hint = Hint::new();
-    if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+    if let Some(ext) = ext {
         hint.with_extension(ext);
     }
     let mut format = symphonia::default::get_probe()

@@ -13,7 +13,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Shortcut};
-use voxflow_core::audio::{is_probably_silent, Recorder, MAX_DURATION, MIN_SAMPLES};
+use voxflow_core::audio::{self, is_probably_silent, Recorder, MAX_DURATION, MIN_SAMPLES};
 use voxflow_core::history::HistoryEntry;
 use voxflow_core::output::{deliver, Delivered};
 use voxflow_core::cleanup::{self, Cleaned};
@@ -150,36 +150,10 @@ struct StateEvent<'a> {
     raw: Option<&'a str>,
 }
 
-const DEMO_RAW: &str = "um so I I think we should uh ship the the new build on Friday, no wait, Monday";
-
-/// Synthetic speech-like level envelope at ~30 Hz for the demo: syllable bumps (~4-6 Hz)
-/// grouped into words, short word gaps, occasional pauses, a ~0.03 noise floor. Deterministic.
-pub fn demo_envelope(frames: usize) -> Vec<f32> {
-    let mut seed: u32 = 0x9E37_79B9;
-    let mut rnd = move || {
-        seed ^= seed << 13;
-        seed ^= seed >> 17;
-        seed ^= seed << 5;
-        seed as f32 / u32::MAX as f32
-    };
-    let mut out = Vec::with_capacity(frames + 32);
-    while out.len() < frames {
-        for _ in 0..1 + (rnd() * 4.0) as usize {
-            let len = 5 + (rnd() * 3.0) as usize; // 5-7 frames per syllable
-            let peak = 0.5 + rnd() * 0.45;
-            for k in 0..len {
-                let bump = (std::f32::consts::PI * (k as f32 + 0.5) / len as f32).sin();
-                out.push(0.03 + (peak - 0.03) * bump + (rnd() - 0.5) * 0.02);
-            }
-        }
-        let gap = if rnd() < 0.15 { 12 + (rnd() * 7.0) as usize } else { 3 + (rnd() * 3.0) as usize };
-        for _ in 0..gap {
-            out.push(0.03 + (rnd() - 0.5) * 0.02);
-        }
-    }
-    out.truncate(frames);
-    out.into_iter().map(|l| l.clamp(0.0, 1.0)).collect()
-}
+/// What Whisper might hear from the demo clip ([`audio::DEMO_CLIP_TEXT`]): the clip is clean
+/// read speech, so this is a hand-made disfluent version of it for basic cleanup to fix.
+const DEMO_RAW: &str =
+    "um the work wasn't uh finished at 11:00 p.m. Friday, so they they decided to carry it over to the following Monday.";
 
 #[derive(Serialize, Clone)]
 struct LevelEvent {
@@ -201,6 +175,8 @@ struct Worker {
     demo: bool,
     /// Demo cycles still to run after the current one.
     demo_left: u32,
+    /// Demo clip playing; dropping it stops the sound.
+    playback: Option<Sender<()>>,
 }
 
 pub fn spawn(app: AppHandle, tx: Sender<Input>, rx: Receiver<Input>) {
@@ -215,6 +191,7 @@ pub fn spawn(app: AppHandle, tx: Sender<Input>, rx: Receiver<Input>) {
         esc_registered: Vec::new(),
         demo: false,
         demo_left: 0,
+        playback: None,
     };
     thread::Builder::new()
         .name("voxflow-dictation".into())
@@ -425,15 +402,27 @@ impl Worker {
         self.set_esc(true);
         self.emit(Phase::Recording, None);
         let (tx, gen) = (self.tx.clone(), self.gen);
+        // Real audio: the bundled clip's level envelope, streamed in real time through the
+        // same level path as the mic while the clip plays on the speakers.
+        let clip = voxflow_core::decode::decode_bytes(audio::DEMO_CLIP, "mp3").unwrap_or_else(|e| {
+            eprintln!("voxflow: demo clip: {e:#}");
+            Vec::new()
+        });
+        let levels = audio::envelope(&clip);
+        let block = Duration::from_millis(audio::LEVEL_BLOCK_MS);
+        let len = block * levels.len() as u32;
+        self.playback = Some(audio::play(clip));
         thread::spawn(move || {
-            for level in demo_envelope(120) {
-                thread::sleep(Duration::from_millis(33));
+            let start = Instant::now();
+            for (i, level) in levels.into_iter().enumerate() {
+                // Paced by wall clock (block i ends at (i+1)·block), so sleeps don't drift.
+                thread::sleep((start + block * (i as u32 + 1)).saturating_duration_since(Instant::now()));
                 if tx.send(Input::DemoLevel(gen, level)).is_err() {
                     break;
                 }
             }
         });
-        self.after(4000, Input::DemoStep(gen, Phase::Transcribing));
+        self.after(len.as_millis() as u64, Input::DemoStep(gen, Phase::Transcribing));
     }
 
     fn demo_step(&mut self, next: Phase) {
@@ -441,6 +430,7 @@ impl Worker {
         match next {
             Phase::Recording => self.demo_cycle(),
             Phase::Transcribing => {
+                self.playback = None;
                 self.emit(Phase::Transcribing, None);
                 self.after(1200, Input::DemoStep(gen, Phase::Cleaning));
             }
@@ -473,6 +463,7 @@ impl Worker {
     }
 
     fn abort_demo(&mut self) {
+        self.playback = None;
         self.set_demo(false);
         self.gen += 1; // pending demo steps and levels are now stale
         self.go_idle();
@@ -603,15 +594,8 @@ mod tests {
     }
 
     #[test]
-    fn demo_envelope_is_speech_like_and_deterministic() {
-        let e = demo_envelope(120);
-        assert_eq!(e.len(), 120);
-        assert_eq!(e, demo_envelope(120));
-        assert!(e.iter().all(|l| (0.0..=1.0).contains(l)));
-        let max = e.iter().cloned().fold(0.0, f32::max);
-        assert!((0.5..=0.97).contains(&max), "max {max}");
-        let quiet = e.iter().filter(|l| **l < 0.06).count();
-        assert!((10..=80).contains(&quiet), "quiet frames {quiet}"); // gaps exist but don't dominate
+    fn demo_raw_cleans_to_clip_text() {
+        assert_eq!(cleanup::basic(DEMO_RAW, "en"), audio::DEMO_CLIP_TEXT);
     }
 
     #[test]

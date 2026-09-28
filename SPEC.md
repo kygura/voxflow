@@ -198,3 +198,28 @@ Commands: set_ai_key(key), clear_ai_key, test_ai -> Ok(string)/Err(string),
           cleanup_preview(text) -> { basic: string, ai?: string, aiError?: string },
           transcribe_file -> Ok(()) (opens picker; Ok also when user cancels), preview_overlay
 ```
+
+## v3 — readable UI, transcript bubble, real-audio preview, ergonomics
+
+- **Real audio everywhere.** Mic levels: one `dictation://level` per 25 ms of real input (40 Hz),
+  `level = dB mapped -55..0 → 0..1, gamma 0.8`. The demo/preview streams a bundled real speech
+  clip (docs/ASSETS.md) through the same event path in real time and plays it on the default
+  output device; no synthetic envelopes.
+- **Transcript bubble.** The pill shows the transcript in a rounded bubble floating above the
+  bar (done state; click copies). Layout per DESIGN.md.
+- **Ergonomics adopted** (research: docs/ERGONOMICS.md):
+  1. *Warm-up*: the pill shows a pulse until the first level event arrives; if no audio arrives
+     within 1500 ms of start, the session fails with "Microphone not responding".
+  2. *Paste last*: global hotkey `pasteLastHotkey` (default `Alt+Shift+Z`, `""` disables)
+     re-delivers the most recent transcript (clipboard + auto-paste per settings) and flashes the
+     done state with its text. Tray "Copy last transcription" stays.
+  3. *Personal dictionary*: `dictionary: [{ from, to }]` (≤ 200 entries, non-empty `from`),
+     whole-word, case-insensitive replacement applied to the raw transcript before cleanup.
+  4. *Silence auto-stop*: in hands-free mode, 30 s of continuous silence (level < 0.08) stops and
+     transcribes as if the user pressed the hotkey.
+  5. *Sound cues*: `sounds: bool` (default false) — short synthesized start/stop tones on the
+     output device; none on cancel/error.
+- Settings additions: `pasteLastHotkey: string`, `dictionary: {from: string, to: string}[]`,
+  `sounds: boolean`. No new commands (saved via `save_settings`).
+- Deferred: always-visible clickable idle flow bar (focus-stealing risk for a webview window on
+  Windows), command mode, per-app styles, snippets.
