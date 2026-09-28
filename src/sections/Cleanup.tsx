@@ -61,7 +61,7 @@ export function Cleanup({
   onOpenDictionary,
 }: {
   settings: Settings;
-  onSave: (patch: Partial<Settings>) => Promise<boolean>;
+  onSave: (patch: Partial<Settings>) => Promise<boolean | string>;
   hasAiKey: boolean;
   onAiKeyChange: () => void;
   onOpenDictionary: () => void;
@@ -69,7 +69,7 @@ export function Cleanup({
   const { saved, flash } = useSavedFlash();
   const save = async (patch: Partial<Settings>) => {
     const ok = await onSave(patch);
-    if (ok) flash();
+    if (ok === true) flash();
     return ok;
   };
 

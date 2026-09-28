@@ -40,14 +40,14 @@ export function Transcription({
   onApiKeyChange,
 }: {
   settings: Settings;
-  onSave: (patch: Partial<Settings>) => Promise<boolean>;
+  onSave: (patch: Partial<Settings>) => Promise<boolean | string>;
   hasApiKey: boolean;
   onApiKeyChange: () => void;
 }) {
   const { saved, flash } = useSavedFlash();
   const save = async (patch: Partial<Settings>) => {
     const ok = await onSave(patch);
-    if (ok) flash();
+    if (ok === true) flash();
     return ok;
   };
 
@@ -60,7 +60,9 @@ export function Transcription({
       />
       <Card>
         <CardTitle>Backend</CardTitle>
-        <Field label="Backend">
+        {/* Box heading already reads "Backend" — the field's own aria-label
+            (via Segmented's `name`) carries a11y without a duplicate visible label. */}
+        <Field label=" ">
           <Segmented
             name="Backend"
             value={settings.backend}
@@ -86,7 +88,7 @@ function LocalPanel({
   onSave,
 }: {
   settings: Settings;
-  onSave: (patch: Partial<Settings>) => Promise<boolean>;
+  onSave: (patch: Partial<Settings>) => Promise<boolean | string>;
 }) {
   const [models, setModels] = useState<ModelInfo[] | null>(null);
   const [progress, setProgress] = useState<Record<string, { downloaded: number; total: number }>>({});
@@ -300,7 +302,7 @@ function ServerPanel({
   onApiKeyChange,
 }: {
   settings: Settings;
-  onSave: (patch: Partial<Settings>) => Promise<boolean>;
+  onSave: (patch: Partial<Settings>) => Promise<boolean | string>;
   hasApiKey: boolean;
   onApiKeyChange: () => void;
 }) {

@@ -1,12 +1,11 @@
 // DESIGN.md §3.6 — personal dictionary: whole-word, case-insensitive replacements
 // applied to the raw transcript before cleanup (core/src/cleanup.rs::apply_dictionary).
-import { useState } from "react";
-import type { DictEntry, Settings } from "../lib/ipc";
+import { useRef, useState } from "react";
+import { MAX_DICT, type DictEntry, type Settings } from "../lib/ipc";
 import { api } from "../lib/api";
 import { Button, EmptyState, Input, SectionHeader, useSavedFlash } from "../components/ui";
 import { ArrowRight, Book, Trash } from "../components/icons";
 
-const MAX = 200;
 const WARN_AT = 190;
 
 export function Dictionary({
@@ -14,7 +13,7 @@ export function Dictionary({
   onSave,
 }: {
   settings: Settings;
-  onSave: (patch: Partial<Settings>) => Promise<boolean>;
+  onSave: (patch: Partial<Settings>) => Promise<boolean | string>;
 }) {
   const { saved, flash } = useSavedFlash();
   const [fromInput, setFromInput] = useState("");
@@ -25,18 +24,23 @@ export function Dictionary({
   const [deletingIndex, setDeletingIndex] = useState<number | null>(null);
 
   const dict = settings.dictionary;
+  // Rapid deletes fire overlapping setTimeout callbacks; each must filter the
+  // latest dictionary, not the array closed over when it was scheduled, or a
+  // second delete can resurrect the first.
+  const dictRef = useRef(dict);
+  dictRef.current = dict;
 
   const save = async (next: DictEntry[]) => {
     const ok = await onSave({ dictionary: next });
-    if (ok) flash();
+    if (ok === true) flash();
     return ok;
   };
 
   const addEntry = async () => {
     const from = fromInput.trim();
     if (!from) return;
-    if (dict.length >= MAX) {
-      setAddError(`Dictionary is full (${MAX}).`);
+    if (dict.length >= MAX_DICT) {
+      setAddError(`Dictionary is full (${MAX_DICT}).`);
       return;
     }
     if (dict.some((e) => e.from.toLowerCase() === from.toLowerCase())) {
@@ -45,16 +49,17 @@ export function Dictionary({
     }
     setAddError(null);
     const ok = await save([{ from, to: toInput.trim() }, ...dict]);
-    if (ok) {
+    if (ok === true) {
       setFromInput("");
       setToInput("");
     }
   };
 
   const removeAt = (index: number) => {
+    const target = dict[index];
     setDeletingIndex(index);
     setTimeout(() => {
-      save(dict.filter((_, i) => i !== index));
+      save(dictRef.current.filter((e) => e.from.toLowerCase() !== target.from.toLowerCase()));
       setDeletingIndex(null);
     }, 320);
   };
@@ -111,7 +116,7 @@ export function Dictionary({
       </div>
       {addError && <p className="field-helper field-helper--error dict-add-error">{addError}</p>}
       <p className={`dict-count${count >= WARN_AT ? " dict-count--err" : ""}`}>
-        {count} of {MAX}
+        {count} of {MAX_DICT}
       </p>
 
       {count === 0 ? (
@@ -193,6 +198,7 @@ function DictRow({
       role="listitem"
       tabIndex={0}
       onKeyDown={(e) => {
+        if (e.target !== e.currentTarget) return; // ignore key events bubbling from the edit inputs
         if (e.key === "Delete") onDelete();
         else if (e.key === "c" && (e.ctrlKey || e.metaKey)) onCopy();
       }}

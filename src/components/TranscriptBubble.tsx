@@ -1,35 +1,32 @@
 // DESIGN.md §2.7 — transcript bubble shown above the pill in the done state.
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { api } from "../lib/api";
 
 export function TranscriptBubble({
   text,
   note,
+  copied,
   onCopy,
   onHoverChange,
 }: {
   text: string;
   note?: { label: string; err?: boolean } | null;
-  /** Notifies the pill so it can flash its own label and pause the auto-hide timer. */
+  /** The pill's own copy-flash state (avoids a second duplicate timer here). */
+  copied: boolean;
+  /** Notifies the pill so it can flash its own label. */
   onCopy: () => void;
   onHoverChange: (hovering: boolean) => void;
 }) {
-  const [copied, setCopied] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [failed, setFailed] = useState(false);
 
-  useEffect(
-    () => () => {
-      if (timer.current) clearTimeout(timer.current);
-    },
-    [],
-  );
-
-  const handleClick = () => {
-    api.copyText(text);
-    onCopy();
-    setCopied(true);
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => setCopied(false), 1000);
+  const handleClick = async () => {
+    try {
+      await api.copyText(text);
+      setFailed(false);
+      onCopy();
+    } catch {
+      setFailed(true);
+    }
   };
 
   return (
@@ -44,7 +41,9 @@ export function TranscriptBubble({
         <span className={`bubble-note${note?.err ? " bubble-note--err" : ""}`}>
           {note?.label ?? ""}
         </span>
-        <span className="bubble-hint">{copied ? "Copied" : "Click to copy"}</span>
+        <span className={`bubble-hint${failed ? " bubble-note--err" : ""}`}>
+          {failed ? "Copy failed" : copied ? "Copied" : "Click to copy"}
+        </span>
       </div>
     </div>
   );

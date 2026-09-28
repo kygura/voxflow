@@ -265,9 +265,9 @@ textarea {
 }
 
 .field {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(200px, 300px) 1fr;
   align-items: flex-start;
-  justify-content: space-between;
   gap: var(--sp-5);
   padding: 14px 0;
   border-top: var(--bw) solid var(--line);
@@ -288,8 +288,7 @@ textarea {
 }
 
 .field-label-col {
-  width: 300px;
-  flex: none;
+  min-width: 0;
 }
 
 .field-label {
@@ -310,7 +309,6 @@ textarea {
 }
 
 .field-control {
-  flex: 1;
   min-width: 0;
   display: flex;
   align-items: center;
@@ -658,8 +656,8 @@ textarea {
 /* --- HotkeyRecorder --- */
 
 .hotkey-recorder-wrap {
-  flex: none;
-  width: 380px;
+  width: 100%;
+  max-width: 380px;
 }
 
 .hotkey-recorder {

@@ -22,8 +22,9 @@ export function HotkeyRecorder({
   value: string;
   onCapture: (accelerator: string) => Promise<void> | void;
   invalidMessage?: string;
-  /** DESIGN.md §3.3: an empty value renders an "Off" badge instead of caps,
-   * and a "Clear" button outside the box saves "". */
+  /** DESIGN.md §3.3: an empty value renders an "Off" badge instead of caps.
+   * DESIGN.md Round 2 #9: with a value set, "Clear" is a second text action
+   * inside the box, after "Change". */
   allowEmpty?: boolean;
   onClear?: () => void;
 }) {

@@ -207,6 +207,11 @@ body {
   font-weight: 600;
 }
 
+/* Warm-up: label→dots gap is 4px total (dots carry no margin of their own). */
+.pill-body[data-warmup] .pill-label {
+  margin-right: 4px;
+}
+
 /* DESIGN.md Round 2 #4: no `Error` label word — the red dot carries the
    state, and the message gets the whole content slot starting 12px after
    the dot. */
@@ -260,7 +265,6 @@ body {
   display: flex;
   align-items: center;
   gap: 5px;
-  margin-left: 4px;
 }
 
 .warmup-dot {

@@ -83,6 +83,37 @@ function emitHistoryChanged() {
   historyListeners.forEach((cb) => cb());
 }
 
+// Pill dismissal (DESIGN.md §2.3/§2.9) is owned by the backend, not the pill's
+// own JS. There is no real backend in a browser preview, so the mock
+// reproduces the same auto-hide timing and the hold/release behaviour that
+// `hold_pill` drives on the Rust side.
+const AUTO_HIDE_MS: Record<"done:pasted" | "done:copied" | "done:ai-fallback" | "error", number> = {
+  "done:pasted": 2200,
+  "done:copied": 2600,
+  "done:ai-fallback": 3000,
+  error: 3500,
+};
+let autoHideTimer: ReturnType<typeof setTimeout> | null = null;
+let autoHideHeld = false;
+
+function hideKeyFor(state: "done" | "error", message?: string): keyof typeof AUTO_HIDE_MS {
+  if (state === "error") return "error";
+  if (message?.includes("AI cleanup failed")) return "done:ai-fallback";
+  return message === "Copied" ? "done:copied" : "done:pasted";
+}
+
+function scheduleAutoHide(state: "done" | "error", message?: string) {
+  if (autoHideTimer) clearTimeout(autoHideTimer);
+  autoHideHeld = false;
+  autoHideTimer = setTimeout(() => emitState({ state: "idle" }), AUTO_HIDE_MS[hideKeyFor(state, message)]);
+}
+
+function cancelAutoHide() {
+  if (autoHideTimer) clearTimeout(autoHideTimer);
+  autoHideTimer = null;
+  autoHideHeld = false;
+}
+
 let levelTimer: ReturnType<typeof setInterval> | null = null;
 function stopLevelStream() {
   if (levelTimer) clearInterval(levelTimer);
@@ -96,6 +127,8 @@ function startLevelStream() {
   }, 25);
 }
 
+// ponytail: mock-only synthetic envelope; the real backend streams the actual
+// bundled clip's levels (SPEC.md v3 "Real audio everywhere").
 /** Speech-like envelope: bursts separated by brief pauses, ~40 Hz (SPEC v3). */
 function startSyntheticSpeechLevel() {
   stopLevelStream();
@@ -109,10 +142,13 @@ function startSyntheticSpeechLevel() {
   }, 25);
 }
 
-// DESIGN.md §6 demo sample: raw transcript -> cleaned transcript.
+// DESIGN.md §6 demo sample: raw transcript -> cleaned transcript. Matches
+// src-tauri/src/dictation.rs DEMO_RAW and core/src/audio.rs DEMO_CLIP_TEXT
+// (the bundled demo clip's actual sentence, docs/ASSETS.md).
 const DEMO_RAW =
-  "um so I I think we should uh ship the the new build on Friday, no wait, Monday";
-const DEMO_TEXT = "So I think we should ship the new build on Friday, no wait, Monday.";
+  "um the work wasn't uh finished at 11:00 p.m. Friday, so they they decided to carry it over to the following Monday.";
+const DEMO_TEXT =
+  "The work wasn't finished at 11:00 p.m. Friday, so they decided to carry it over to the following Monday.";
 // ?state=done&long=1 — a 6-line sample to verify the bubble's 4-line clamp.
 const DEMO_LONG_TEXT =
   "So I think we should ship the new build on Friday, no wait, actually Monday " +
@@ -122,6 +158,7 @@ const DEMO_LONG_TEXT =
 
 let demoTimer: ReturnType<typeof setTimeout> | null = null;
 function runDemoSequence() {
+  cancelAutoHide();
   if (demoTimer) clearTimeout(demoTimer);
   emitState({ state: "recording", mode: "toggle" });
   startSyntheticSpeechLevel();
@@ -132,9 +169,7 @@ function runDemoSequence() {
       emitState({ state: "cleaning" });
       demoTimer = setTimeout(() => {
         emitState({ state: "done", message: "Pasted", text: DEMO_TEXT, raw: DEMO_RAW });
-        demoTimer = setTimeout(() => {
-          emitState({ state: "idle" });
-        }, 2000);
+        scheduleAutoHide("done", "Pasted");
       }, 900);
     }, 1200);
   }, 4000);
@@ -183,6 +218,7 @@ export const mockApi = {
   transcribeFile: async () => {
     // ponytail: mock has no file picker; just runs the transcribing → cleaning →
     // done sequence a real file transcription goes through, same as stopDictation.
+    cancelAutoHide();
     emitState({ state: "transcribing" });
     setTimeout(() => {
       emitState({ state: "cleaning" });
@@ -201,7 +237,7 @@ export const mockApi = {
         ];
         emitHistoryChanged();
         emitState({ state: "done", message: "Copied", text: DEMO_TEXT, raw: DEMO_RAW });
-        setTimeout(() => emitState({ state: "idle" }), 2000);
+        scheduleAutoHide("done", "Copied");
       }, 900);
     }, 900);
   },
@@ -260,10 +296,12 @@ export const mockApi = {
   },
   copyText: async () => {},
   startDictation: async () => {
+    cancelAutoHide();
     emitState({ state: "recording", mode: "toggle" });
     startLevelStream();
   },
   stopDictation: async () => {
+    cancelAutoHide();
     stopLevelStream();
     emitState({ state: "transcribing" });
     setTimeout(() => {
@@ -285,16 +323,14 @@ export const mockApi = {
           ...history,
         ];
         emitHistoryChanged();
-        emitState({
-          state: "done",
-          message: settings.autoPaste ? "Pasted" : "Copied",
-          text,
-          raw,
-        });
+        const message = settings.autoPaste ? "Pasted" : "Copied";
+        emitState({ state: "done", message, text, raw });
+        scheduleAutoHide("done", message);
       }, 500);
     }, 900);
   },
   cancelDictation: async () => {
+    cancelAutoHide();
     stopLevelStream();
     if (demoTimer) clearTimeout(demoTimer);
     emitState({ state: "idle" });
@@ -306,6 +342,20 @@ export const mockApi = {
     hasAiKey: aiKeySaved,
   }),
   openDataDir: async () => {},
+  // Mirrors the Rust `hold_pill` command: hovering the bubble holds the
+  // pending auto-hide; releasing resumes it with a 1200ms grace period.
+  holdPill: async (hold: boolean) => {
+    if (hold) {
+      autoHideHeld = true;
+      if (autoHideTimer) {
+        clearTimeout(autoHideTimer);
+        autoHideTimer = null;
+      }
+    } else if (autoHideHeld) {
+      autoHideHeld = false;
+      autoHideTimer = setTimeout(() => emitState({ state: "idle" }), 1200);
+    }
+  },
 };
 
 export const mockEvents = {
@@ -339,13 +389,16 @@ export function forceDictationState(
   mode?: DictationStateEvent["mode"],
   opts?: { warmup?: boolean; long?: boolean; flash?: boolean },
 ) {
+  cancelAutoHide();
   stopLevelStream();
   if (state === "done") {
     const text = opts?.long ? DEMO_LONG_TEXT : DEMO_TEXT;
     const raw = opts?.flash ? undefined : DEMO_RAW;
     emitState({ state, message, mode, text, raw });
+    scheduleAutoHide("done", message);
   } else {
     emitState({ state, message, mode });
+    if (state === "error") scheduleAutoHide("error", message);
   }
   // ?warmup=1: stay in the warm-up dots — never emit a level event.
   if (state === "recording" && !opts?.warmup) startSyntheticSpeechLevel();

@@ -13,13 +13,8 @@ import { Sweep } from "./components/ui";
 import { applyTheme } from "./lib/theme";
 import { diffLabel } from "./lib/text";
 
-// DESIGN.md §2.3/§2.9 auto-hide durations, keyed by state + done/error variant.
-const AUTO_HIDE_MS: Record<string, number> = {
-  "done:pasted": 2200,
-  "done:copied": 2600,
-  "done:ai-fallback": 3000,
-  error: 3500,
-};
+// DESIGN.md §2.3/§2.9: auto-hide timing is owned by the backend (`hold_pill`
+// IPC). The pill only reacts to the `idle` state it's told to move to.
 
 function useReducedMotion() {
   const [reduced, setReduced] = useState(
@@ -47,10 +42,6 @@ function doneNote(
   return label ? { label } : null;
 }
 
-function ellipsize(s: string, max: number): string {
-  return s.length > max ? s.slice(0, max) + "…" : s;
-}
-
 function formatTimer(ms: number): string {
   const total = Math.max(0, Math.floor(ms / 1000));
   const m = Math.floor(total / 60);
@@ -71,31 +62,11 @@ function Pill() {
   const [timerText, setTimerText] = useState("00:00");
   const levelRef = useRef(0);
   const hasLevelRef = useRef(false);
+  const prevStateRef = useRef<DictationStateName>("idle");
   const recordingStart = useRef<number | null>(null);
   const reducedMotion = useReducedMotion();
 
-  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const hideDeadline = useRef(0);
   const copyFlashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  /** Schedules the pill+bubble fade-out `ms` from now. */
-  const scheduleHide = useCallback((ms: number) => {
-    if (hideTimer.current) clearTimeout(hideTimer.current);
-    hideDeadline.current = Date.now() + ms;
-    hideTimer.current = setTimeout(() => {
-      setHiding(true);
-      setTimeout(() => setVisible(false), 200);
-    }, ms);
-  }, []);
-
-  /** Cancels the pending auto-hide without touching `hideDeadline` (so the
-   * remaining time can still be read for a click-to-copy resume). */
-  const pauseHide = useCallback(() => {
-    if (hideTimer.current) {
-      clearTimeout(hideTimer.current);
-      hideTimer.current = null;
-    }
-  }, []);
 
   useEffect(() => {
     api.getSettings().then((s) => applyTheme(s.theme));
@@ -113,14 +84,17 @@ function Pill() {
     let unlistenLevel: (() => void) | undefined;
     events
       .onDictationState((e) => {
+        const prevState = prevStateRef.current;
+        prevStateRef.current = e.state;
         setState(e.state);
         setMessage(e.message);
         setMode(e.mode);
         setText(e.text);
         setRaw(e.raw);
-        if (e.state === "recording") {
-          // DESIGN.md §2.5: warm-up resets on every entry into recording, even
-          // if a previous session already saw levels.
+        // DESIGN.md §2.5: warm-up resets on a fresh entry into recording, but
+        // not when hybrid mode re-emits "recording" while already recording
+        // (that would flash the warm-up dots and remount the waveform).
+        if (e.state === "recording" && prevState !== "recording") {
           hasLevelRef.current = false;
           setHasLevel(false);
         }
@@ -184,51 +158,29 @@ function Pill() {
     return () => clearTimeout(timer);
   }, [state]);
 
-  // Show / hide the window-level fade. `idle` hides immediately; `done`/`error`
-  // get their auto-hide duration scheduled by the effect below.
+  // Show / hide the window-level fade. `idle` (auto-hide timing decided by
+  // the backend) hides after the 200ms CSS fade; any other state shows.
   useEffect(() => {
     if (state === "idle") {
-      pauseHide();
       setHiding(true);
       const t = setTimeout(() => setVisible(false), 200);
       return () => clearTimeout(t);
     }
     setHiding(false);
     setVisible(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
 
-  useEffect(() => {
-    if (state !== "done" && state !== "error") return;
-    const note = doneNote(raw, text, message);
-    const key =
-      state === "error"
-        ? "error"
-        : note?.err
-          ? "done:ai-fallback"
-          : `done:${message === "Copied" ? "copied" : "pasted"}`;
-    scheduleHide(AUTO_HIDE_MS[key] ?? 2200);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state, message, text, raw]);
-
-  const handleBubbleHover = useCallback(
-    (hovering: boolean) => {
-      if (hovering) pauseHide();
-      else scheduleHide(1200);
-    },
-    [pauseHide, scheduleHide],
-  );
+  /** Hovering the bubble holds the pending auto-hide on the Rust side;
+   * leaving releases it. */
+  const handleBubbleHover = useCallback((hovering: boolean) => {
+    api.holdPill(hovering);
+  }, []);
 
   const handleBubbleCopy = useCallback(() => {
-    const remaining = Math.max(0, hideDeadline.current - Date.now());
-    pauseHide();
     setCopyFlash(true);
     if (copyFlashTimer.current) clearTimeout(copyFlashTimer.current);
-    copyFlashTimer.current = setTimeout(() => {
-      setCopyFlash(false);
-      scheduleHide(Math.max(remaining, 800));
-    }, 1000);
-  }, [pauseHide, scheduleHide]);
+    copyFlashTimer.current = setTimeout(() => setCopyFlash(false), 1000);
+  }, []);
 
   if (!visible) {
     return <div className="pill-root pill-root--hidden" />;
@@ -247,21 +199,29 @@ function Pill() {
   const note = isDone ? doneNote(raw, text, message) : null;
   const showBubble = isDone && !!text;
 
-  const srText = isWarmup
+  const label = isWarmup
     ? "Listening"
     : isRecording
-      ? "Recording"
+      ? timerText
       : isTranscribing
-        ? "Transcribing"
+        ? "Transcribing…"
         : isCleaning
-          ? "Cleaning up"
+          ? "Cleaning up…"
           : isDone
-            ? doneLabel === "Copied"
-              ? "Copied to clipboard"
-              : "Pasted"
-            : isError
-              ? `Error: ${message ?? "Something went wrong"}`
-              : "";
+            ? doneLabel
+            : "";
+
+  // Screen-reader text derived from the visible label: recording reads as
+  // "Recording" (not the ticking timer), the ellipsis is decorative only.
+  const srText = isRecording && !isWarmup
+    ? "Recording"
+    : isDone
+      ? doneLabel === "Copied"
+        ? "Copied to clipboard"
+        : "Pasted"
+      : isError
+        ? `Error: ${message ?? "Something went wrong"}`
+        : label.replace("…", "");
 
   return (
     <div className={`pill-root pill-root--visible${hiding ? " pill-root--hiding" : ""}`}>
@@ -275,24 +235,14 @@ function Pill() {
         <span className="pill-dot" data-state={state} aria-hidden="true" />
 
         <span className="pill-label" data-tone={isDone ? "accent" : isError ? "err" : undefined}>
-          {isWarmup
-            ? "Listening"
-            : isRecording
-              ? timerText
-              : isTranscribing
-                ? "Transcribing…"
-                : isCleaning
-                  ? "Cleaning up…"
-                  : isDone
-                    ? doneLabel
-                    : ""}
+          {label}
         </span>
 
         <div className="pill-content" key={`${state}${isWarmup ? "-warmup" : ""}`}>
           {isWarmup && <WarmupDots />}
           {isRecording && !isWarmup && <Waveform levelRef={levelRef} reducedMotion={reducedMotion} />}
           {(isTranscribing || isCleaning) && <Sweep />}
-          {isError && <span className="pill-error-text">{ellipsize(message ?? "Something went wrong", 44)}</span>}
+          {isError && <span className="pill-error-text">{message ?? "Something went wrong"}</span>}
           <span role="status" aria-live="polite" className="sr-only">
             {srText}
           </span>
@@ -315,7 +265,13 @@ function Pill() {
       </div>
 
       {showBubble && (
-        <TranscriptBubble text={text!} note={note} onCopy={handleBubbleCopy} onHoverChange={handleBubbleHover} />
+        <TranscriptBubble
+          text={text!}
+          note={note}
+          copied={copyFlash}
+          onCopy={handleBubbleCopy}
+          onHoverChange={handleBubbleHover}
+        />
       )}
     </div>
   );

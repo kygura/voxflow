@@ -12,15 +12,7 @@ import { History } from "./sections/History";
 import { About } from "./sections/About";
 import { applyTheme } from "./lib/theme";
 
-type Section =
-  | "general"
-  | "transcription"
-  | "cleanup"
-  | "dictionary"
-  | "playground"
-  | "history"
-  | "about";
-const SECTIONS: Section[] = [
+const SECTIONS = [
   "general",
   "transcription",
   "cleanup",
@@ -28,7 +20,8 @@ const SECTIONS: Section[] = [
   "playground",
   "history",
   "about",
-];
+] as const;
+type Section = (typeof SECTIONS)[number];
 
 export default function App() {
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -93,9 +86,10 @@ export default function App() {
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (!e.ctrlKey && !e.metaKey) return;
-      if (["1", "2", "3", "4", "5", "6", "7"].includes(e.key)) {
+      const n = Number(e.key);
+      if (n >= 1 && n <= SECTIONS.length) {
         e.preventDefault();
-        goToSection(SECTIONS[Number(e.key) - 1]);
+        goToSection(SECTIONS[n - 1]);
       } else if (e.key.toLowerCase() === "f") {
         e.preventDefault();
         setSection("history");
@@ -130,7 +124,7 @@ export default function App() {
     api.getStatus().then(setStatus);
   };
 
-  const saveSettings = async (patch: Partial<Settings>) => {
+  const saveSettings = async (patch: Partial<Settings>): Promise<boolean | string> => {
     const next = { ...settings, ...patch };
     setSettings(next);
     try {
@@ -138,8 +132,9 @@ export default function App() {
       return true;
     } catch (err) {
       setSettings(await api.getSettings());
-      surfaceError(String(err));
-      return false;
+      const message = String(err);
+      surfaceError(message);
+      return message;
     }
   };
 

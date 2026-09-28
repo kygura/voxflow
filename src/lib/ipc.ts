@@ -23,12 +23,14 @@ export type CleanupMode = z.infer<typeof CleanupModeSchema>;
 // UTF-16 code units, which double-counts astral-plane emoji. Count code
 // points via spread to match the Rust-side limit.
 const codePointCount = (s: string) => [...s].length;
+const max100CodePoints = <T extends z.ZodString>(schema: T) =>
+  schema.refine((s) => codePointCount(s) <= 100, { message: "String must contain at most 100 character(s)" });
+
+export const MAX_DICT = 200;
+
 export const DictEntrySchema = z.object({
-  from: z
-    .string()
-    .min(1)
-    .refine((s) => codePointCount(s) <= 100, { message: "String must contain at most 100 character(s)" }),
-  to: z.string().refine((s) => codePointCount(s) <= 100, { message: "String must contain at most 100 character(s)" }),
+  from: max100CodePoints(z.string().min(1)),
+  to: max100CodePoints(z.string()),
 });
 export type DictEntry = z.infer<typeof DictEntrySchema>;
 
@@ -47,7 +49,7 @@ export const SettingsSchema = z.object({
   cleanup: CleanupModeSchema,
   ai: z.object({ baseUrl: z.string(), model: z.string() }),
   pasteLastHotkey: z.string(),
-  dictionary: z.array(DictEntrySchema).max(200),
+  dictionary: z.array(DictEntrySchema).max(MAX_DICT),
   sounds: z.boolean(),
 });
 export type Settings = z.infer<typeof SettingsSchema>;
@@ -159,6 +161,9 @@ export const ipc = {
   cancelDictation: () => invoke<void>("cancel_dictation"),
   getStatus: () => invoke("get_status").then((v) => StatusSchema.parse(v)),
   openDataDir: () => invoke<void>("open_data_dir"),
+  // Pill dismissal is owned by Rust: hovering the transcript bubble holds the
+  // pending auto-hide, releasing it resumes with a short grace period.
+  holdPill: (hold: boolean) => invoke<void>("hold_pill", { hold }),
 };
 
 // --- events -------------------------------------------------------------

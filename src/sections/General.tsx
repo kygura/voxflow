@@ -39,7 +39,7 @@ export function General({
   onSave,
 }: {
   settings: Settings;
-  onSave: (patch: Partial<Settings>) => Promise<boolean>;
+  onSave: (patch: Partial<Settings>) => Promise<boolean | string>;
 }) {
   const [devices, setDevices] = useState<string[]>([]);
   const { saved, flash } = useSavedFlash();
@@ -50,7 +50,7 @@ export function General({
 
   const save = async (patch: Partial<Settings>) => {
     const ok = await onSave(patch);
-    if (ok) flash();
+    if (ok === true) flash();
   };
 
   return (
@@ -68,8 +68,8 @@ export function General({
             value={settings.hotkey}
             onCapture={async (accel) => {
               if (accel === settings.pasteLastHotkey) throw "Same as the paste-last hotkey.";
-              const ok = await onSave({ hotkey: accel });
-              if (!ok) throw "Backend could not register this combo.";
+              const result = await onSave({ hotkey: accel });
+              if (result !== true) throw result || "Backend could not register this combo.";
               flash();
             }}
           />
@@ -83,8 +83,8 @@ export function General({
             allowEmpty
             onCapture={async (accel) => {
               if (accel === settings.hotkey) throw "Same as the dictation hotkey.";
-              const ok = await onSave({ pasteLastHotkey: accel });
-              if (!ok) throw "Backend could not register this combo.";
+              const result = await onSave({ pasteLastHotkey: accel });
+              if (result !== true) throw result || "Backend could not register this combo.";
               flash();
             }}
             onClear={() => save({ pasteLastHotkey: "" })}

@@ -9,9 +9,14 @@ VoxFlow is a desktop voice-dictation app. Press your hotkey anywhere to record s
 - **Remote transcription** via OpenAI-compatible APIs (presets for OpenAI, Groq, self-hosted faster-whisper)
 - **Conscious editing** (cleanup modes: off/basic/ai) removes disfluencies (um, uh, eh, este, stutters) and repairs punctuation; AI mode via OpenAI-compatible endpoint with presets (Ollama, LM Studio, OpenAI, Groq, OpenRouter, Anthropic), own keyring key, falls back to basic on any error; history keeps both raw and cleaned text
 - **Automatic paste** into focused apps, with optional clipboard restoration
-- **Live waveform** pill overlay (brutalist dark capsule, acid-lime accent) showing recording state (listening/transcribing/cleaning/done/error)
+- **Live waveform** pill overlay (dark capsule, acid-lime accent) showing recording state (listening/transcribing/cleaning/done/error), with a transcript bubble above it on done (click to copy)
+- **Paste-last hotkey** (default Alt+Shift+Z): re-delivers the most recent transcript wherever the cursor is
+- **Personal dictionary**: whole-word, case-insensitive replacements applied to the raw transcript before cleanup (up to 200 entries)
+- **Sound cues** (optional): short tones when recording starts and stops
+- **Warm-up detection**: if no audio arrives within 1.5s of starting to record, the pill shows "Microphone not responding"
+- **Hands-free auto-stop**: 30s of continuous silence stops and transcribes automatically
 - **History** of transcriptions (last 200, searchable, raw text peek)
-- **Settings window** with sections for hotkey, backend, model selection, input device, language, cleanup, AI endpoint, history, and cleanup playground
+- **Settings window** with sections for hotkey, backend, model selection, input device, language, cleanup, dictionary, AI endpoint, history, and cleanup playground
 - **OS credential store** for API keys (Windows Credential Manager or Linux Secret Service)
 - **Tray menu** with quick start/stop, copy last transcription
 
@@ -42,7 +47,7 @@ The pill overlay (bottom-center) shows recording state with a live waveform, tra
 
 ## Testing without a microphone
 
-**Preview overlay** (Settings button): drives the pill through a demo cycle with sample voice levels and text (recording → transcribing → cleaning → done), never touches clipboard or history.
+**Preview overlay** (Settings button): drives the pill through a demo cycle playing a bundled real speech clip through the default output device, with the pill's waveform driven by the clip's real levels (recording → transcribing → cleaning → done), never touches clipboard or history. Credits for the bundled clip: `docs/ASSETS.md`.
 
 **CLI flag** `--demo`: repeats the demo cycle 5 times with 1.5 s gaps after launch. Aborted by any real dictation.
 

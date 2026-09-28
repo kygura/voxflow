@@ -4,10 +4,8 @@ import { useEffect, useRef } from "react";
 
 const BAR_W = 3;
 const BAR_GAP = 3;
-const PITCH = BAR_W + BAR_GAP; // 5px
+const PITCH = BAR_W + BAR_GAP; // 6px
 const SLOT_H = 28;
-// ponytail: level is already dB-mapped 0..1; raise GAIN only if real speech peaks under 0.6
-const GAIN = 1.0;
 const SAMPLE_MS = 25; // matches dictation://level rate (~40Hz)
 
 export function Waveform({
@@ -24,8 +22,6 @@ export function Waveform({
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext("2d");
     if (!canvas || !ctx) return;
-
-    const supportsRoundRect = typeof ctx.roundRect === "function";
 
     let width = canvas.clientWidth || 208;
     let n = Math.max(1, Math.floor((width + BAR_GAP) / PITCH));
@@ -61,13 +57,9 @@ export function Waveform({
 
     const drawBar = (x: number, h: number) => {
       const y = (SLOT_H - h) / 2;
-      if (supportsRoundRect) {
-        ctx.beginPath();
-        ctx.roundRect(x, y, BAR_W, h, 1.5);
-        ctx.fill();
-      } else {
-        ctx.fillRect(x, y, BAR_W, h);
-      }
+      ctx.beginPath();
+      ctx.roundRect(x, y, BAR_W, h, 1.5);
+      ctx.fill();
     };
 
     let raf = 0;
@@ -75,7 +67,7 @@ export function Waveform({
       const dt = now - last;
       last = now;
 
-      const v = Math.min(1, Math.max(0, levelRef.current * GAIN));
+      const v = Math.min(1, Math.max(0, levelRef.current));
       env += (v - env) * (v > env ? 0.6 : 0.15);
 
       accumulator += dt;
