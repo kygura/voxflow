@@ -4,7 +4,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-X="$HOME/.local/xtool"   # user-local LLVM 21, see README "Build Windows exe from WSL"
+X="$HOME/.local/xtool"   # user-local LLVM 21, see README "Cross-compile from WSL (recommended)"
 export PATH="$X/usr/lib/llvm-21/bin:$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 export LD_LIBRARY_PATH="$X/usr/lib/x86_64-linux-gnu:$X/usr/lib/llvm-21/lib:$HOME/.local/sysroot/usr/lib/llvm-21/lib"
 export LIBCLANG_PATH="${LIBCLANG_PATH:-$HOME/.local/sysroot/usr/lib/llvm-21/lib}"
