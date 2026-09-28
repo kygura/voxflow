@@ -27,7 +27,7 @@
         "title": "VoxFlow Pill",
         "url": "pill.html",
         "width": 440,
-        "height": 220,
+        "height": 240,
         "transparent": true,
         "decorations": false,
         "alwaysOnTop": true,

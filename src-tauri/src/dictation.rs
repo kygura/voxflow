@@ -637,7 +637,7 @@ fn show_pill(app: &AppHandle) {
         .or_else(|| app.primary_monitor().ok().flatten());
     if let Some(m) = monitor {
         let s = m.scale_factor();
-        let (w, h) = ((440.0 * s) as i32, (220.0 * s) as i32);
+        let (w, h) = ((440.0 * s) as i32, (240.0 * s) as i32);
         let wa = m.work_area();
         // No work-area info (work area == monitor): assume a taskbar, 62 px up.
         let margin = if wa.size == *m.size() { 62.0 } else { 12.0 };
