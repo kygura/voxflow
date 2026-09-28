@@ -17,12 +17,13 @@ import {
 
 type Preset = "ollama" | "lm_studio" | "openai" | "groq" | "openrouter" | "anthropic" | "custom";
 
-// Worker note: LM Studio's model name is left blank (input placeholder only) since it
-// depends entirely on what the user has loaded locally. Anthropic model id confirmed
-// current via the claude-api skill.
-const PRESETS: Record<Exclude<Preset, "custom">, { baseUrl: string; model: string }> = {
+// Worker note: LM Studio's model name defaults to "local-model" (LM Studio's own
+// server accepts any non-empty string and routes to whatever is loaded) since the
+// Rust backend rejects an empty model. Anthropic model id confirmed current via the
+// claude-api skill.
+export const PRESETS: Record<Exclude<Preset, "custom">, { baseUrl: string; model: string }> = {
   ollama: { baseUrl: "http://localhost:11434/v1", model: "llama3.2" },
-  lm_studio: { baseUrl: "http://localhost:1234/v1", model: "" },
+  lm_studio: { baseUrl: "http://localhost:1234/v1", model: "local-model" },
   openai: { baseUrl: "https://api.openai.com/v1", model: "gpt-4o-mini" },
   groq: { baseUrl: "https://api.groq.com/openai/v1", model: "llama-3.1-8b-instant" },
   openrouter: { baseUrl: "https://openrouter.ai/api/v1", model: "openai/gpt-4o-mini" },
@@ -56,10 +57,12 @@ export function Cleanup({
   settings,
   onSave,
   hasAiKey,
+  onAiKeyChange,
 }: {
   settings: Settings;
   onSave: (patch: Partial<Settings>) => Promise<boolean>;
   hasAiKey: boolean;
+  onAiKeyChange: () => void;
 }) {
   const { saved, flash } = useSavedFlash();
   const save = async (patch: Partial<Settings>) => {
@@ -174,11 +177,22 @@ export function Cleanup({
           disabled={disabled}
           helper="Stored in the system keyring. Local servers usually need none."
         >
-          <ApiKeyField saved={hasAiKey} onSave={(key) => api.setAiKey(key)} onClear={() => api.clearAiKey()} />
+          <ApiKeyField
+            saved={hasAiKey}
+            disabled={disabled}
+            onSave={async (key) => {
+              await api.setAiKey(key);
+              onAiKeyChange();
+            }}
+            onClear={async () => {
+              await api.clearAiKey();
+              onAiKeyChange();
+            }}
+          />
         </Field>
         <Field label=" " disabled={disabled}>
           <div className="test-connection-row">
-            <Button variant="secondary" loading={testState.kind === "testing"} onClick={runTest}>
+            <Button variant="secondary" disabled={disabled} loading={testState.kind === "testing"} onClick={runTest}>
               Test
             </Button>
             {testState.kind === "ok" && (

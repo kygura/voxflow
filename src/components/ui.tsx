@@ -7,6 +7,7 @@ export function Sidebar({
   active,
   onSelect,
   status,
+  fileStatus,
   hotkey,
   onTranscribeFile,
   onPreviewOverlay,
@@ -14,6 +15,7 @@ export function Sidebar({
   active: string;
   onSelect: (id: string) => void;
   status: "idle" | "recording" | "transcribing" | "cleaning";
+  fileStatus: "idle" | "recording" | "transcribing" | "cleaning" | "done" | "error";
   hotkey: string;
   onTranscribeFile: () => void;
   onPreviewOverlay: () => void;
@@ -26,10 +28,14 @@ export function Sidebar({
     { id: "history", label: "History" },
     { id: "about", label: "About" },
   ];
-  const [transcribing, setTranscribing] = useState(false);
 
   const statusLabel =
     status === "idle" ? "IDLE" : status === "recording" ? "RECORDING" : status === "cleaning" ? "CLEANING" : "TRANSCRIBING";
+
+  // DESIGN.md §3.1: disabled while a dictation/transcription is actually in
+  // flight; allowed again once it lands on idle, done or error.
+  const canTranscribeFile = fileStatus === "idle" || fileStatus === "done" || fileStatus === "error";
+  const isFileBusy = fileStatus === "transcribing" || fileStatus === "cleaning";
 
   return (
     <nav className="sidebar" aria-label="Sections">
@@ -54,19 +60,16 @@ export function Sidebar({
         <Button
           variant="secondary"
           className="sidebar-tool-btn"
-          disabled={transcribing}
-          onClick={() => {
-            setTranscribing(true);
-            Promise.resolve(onTranscribeFile()).finally(() => setTranscribing(false));
-          }}
+          disabled={!canTranscribeFile}
+          onClick={onTranscribeFile}
         >
           <File size={14} />
-          {transcribing ? "Transcribing…" : "Transcribe file…"}
+          {isFileBusy ? "Transcribing…" : "Transcribe file…"}
         </Button>
         <Button
           variant="secondary"
           className="sidebar-tool-btn"
-          disabled={status !== "idle"}
+          disabled={fileStatus === "recording"}
           onClick={onPreviewOverlay}
         >
           <Play size={14} />
@@ -427,9 +430,16 @@ export function ProgressBar({
 /** DESIGN.md §2.6 sweep: a moving accent segment over a track; reduced motion
  * swaps to a 3-block stepper. Used by the pill (transcribing/cleaning) and
  * ProgressBar's indeterminate state. */
-export function Sweep({ width = 188 }: { width?: number }) {
+export function Sweep({ width }: { width?: number }) {
+  // No explicit width: the track fills its flex slot via CSS (.sweep is
+  // width: 100%) and the travel distance is computed the same way, so the
+  // pill's content slot and this component never disagree about the width.
+  const style = width
+    ? ({ width, ["--sweep-travel" as string]: `${width - 40}px` } as React.CSSProperties)
+    : ({ ["--sweep-travel" as string]: "calc(100% - 40px)" } as React.CSSProperties);
   return (
-    <div className="sweep" style={{ width, ["--sweep-travel" as string]: `${width - 40}px` }}>
+    <div className="sweep" style={style}>
+
       <span className="sweep-segment" />
       <span className="sweep-reduced" aria-hidden="true">
         <span className="sweep-reduced-block" />
@@ -553,16 +563,19 @@ export function Banner({
 /** DESIGN.md §3.4/§3.5 — write-only key field, shared by Transcription and Cleanup. */
 export function ApiKeyField({
   saved,
+  disabled,
   onSave,
   onClear,
 }: {
   saved: boolean;
+  disabled?: boolean;
   onSave: (key: string) => Promise<void>;
   onClear: () => Promise<void>;
 }) {
   const [state, setState] = useState<"saved" | "input">(saved ? "saved" : "input");
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
+  const [clearing, setClearing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => setState(saved ? "saved" : "input"), [saved]);
@@ -579,6 +592,16 @@ export function ApiKeyField({
     }
   };
 
+  const doClear = async () => {
+    setClearing(true);
+    try {
+      await onClear();
+      setState("input");
+    } finally {
+      setClearing(false);
+    }
+  };
+
   if (state === "saved") {
     return (
       <div className="api-key-field">
@@ -587,6 +610,7 @@ export function ApiKeyField({
         </span>
         <Button
           variant="secondary"
+          disabled={disabled}
           onClick={() => {
             setState("input");
             requestAnimationFrame(() => inputRef.current?.focus());
@@ -594,7 +618,7 @@ export function ApiKeyField({
         >
           Replace
         </Button>
-        <Button variant="ghost" onClick={async () => onClear()}>
+        <Button variant="ghost" disabled={disabled} loading={clearing} onClick={doClear}>
           Remove
         </Button>
       </div>
@@ -608,13 +632,14 @@ export function ApiKeyField({
         type="password"
         placeholder="sk-…"
         value={value}
+        disabled={disabled}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === "Enter") doSave();
           if (e.key === "Escape" && saved) setState("saved");
         }}
       />
-      <Button variant="primary" disabled={!value} loading={busy} onClick={doSave}>
+      <Button variant="primary" disabled={disabled || !value} loading={busy} onClick={doSave}>
         Save
       </Button>
     </div>

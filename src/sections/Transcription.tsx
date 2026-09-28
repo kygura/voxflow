@@ -37,10 +37,12 @@ export function Transcription({
   settings,
   onSave,
   hasApiKey,
+  onApiKeyChange,
 }: {
   settings: Settings;
   onSave: (patch: Partial<Settings>) => Promise<boolean>;
   hasApiKey: boolean;
+  onApiKeyChange: () => void;
 }) {
   const { saved, flash } = useSavedFlash();
   const save = async (patch: Partial<Settings>) => {
@@ -69,7 +71,7 @@ export function Transcription({
       {settings.backend === "local" ? (
         <LocalPanel settings={settings} onSave={save} />
       ) : (
-        <ServerPanel settings={settings} onSave={save} hasApiKey={hasApiKey} />
+        <ServerPanel settings={settings} onSave={save} hasApiKey={hasApiKey} onApiKeyChange={onApiKeyChange} />
       )}
     </>
   );
@@ -291,10 +293,12 @@ function ServerPanel({
   settings,
   onSave,
   hasApiKey,
+  onApiKeyChange,
 }: {
   settings: Settings;
   onSave: (patch: Partial<Settings>) => Promise<boolean>;
   hasApiKey: boolean;
+  onApiKeyChange: () => void;
 }) {
   const preset = presetFor(settings.remote);
   const [baseUrl, setBaseUrl] = useState(settings.remote.baseUrl);
@@ -377,7 +381,17 @@ function ServerPanel({
         <Input mono placeholder="whisper-1" value={model} onChange={(e) => onModelChange(e.target.value)} />
       </Field>
       <Field label="API key">
-        <ApiKeyField saved={hasApiKey} onSave={(key) => api.setApiKey(key)} onClear={() => api.clearApiKey()} />
+        <ApiKeyField
+          saved={hasApiKey}
+          onSave={async (key) => {
+            await api.setApiKey(key);
+            onApiKeyChange();
+          }}
+          onClear={async () => {
+            await api.clearApiKey();
+            onApiKeyChange();
+          }}
+        />
       </Field>
       <Field label=" ">
         <div className="test-connection-row">

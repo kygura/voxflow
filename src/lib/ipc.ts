@@ -148,9 +148,10 @@ export const ipc = {
 export function onDictationState(
   cb: (e: DictationStateEvent) => void,
 ): Promise<UnlistenFn> {
-  return listen("dictation://state", (e) =>
-    cb(DictationStateEventSchema.parse(e.payload)),
-  );
+  return listen("dictation://state", (e) => {
+    const parsed = DictationStateEventSchema.safeParse(e.payload);
+    cb(parsed.success ? parsed.data : { state: "idle" });
+  });
 }
 
 export function onDictationLevel(

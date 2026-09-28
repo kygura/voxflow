@@ -172,11 +172,28 @@ export const mockApi = {
     return { basic, ai: mockBasicCleanup(text) };
   },
   transcribeFile: async () => {
-    // ponytail: mock has no file picker; just runs the demo done state.
+    // ponytail: mock has no file picker; just runs the transcribing → cleaning →
+    // done sequence a real file transcription goes through, same as stopDictation.
     emitState({ state: "transcribing" });
     setTimeout(() => {
-      emitState({ state: "done", message: "Copied", text: DEMO_TEXT, raw: DEMO_RAW });
-      setTimeout(() => emitState({ state: "idle" }), 2000);
+      emitState({ state: "cleaning" });
+      setTimeout(() => {
+        history = [
+          {
+            id: String(Date.now()),
+            text: DEMO_TEXT,
+            raw: DEMO_RAW,
+            createdAt: Date.now(),
+            backend: settings.backend,
+            model: settings.backend === "local" ? settings.localModel : settings.remote.model,
+            durationMs: 1800,
+          },
+          ...history,
+        ];
+        emitHistoryChanged();
+        emitState({ state: "done", message: "Copied", text: DEMO_TEXT, raw: DEMO_RAW });
+        setTimeout(() => emitState({ state: "idle" }), 2000);
+      }, 900);
     }, 900);
   },
   previewOverlay: async () => {

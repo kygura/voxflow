@@ -1,36 +1,54 @@
 // DESIGN.md §3.6 — paste raw text, compare Basic vs AI cleanup output.
 import { useState } from "react";
 import { api } from "../lib/api";
-import type { CleanupPreview } from "../lib/ipc";
+import type { CleanupPreview, Settings } from "../lib/ipc";
+import { diffLabel } from "../lib/text";
 import { Button, Card, SectionHeader, Textarea } from "../components/ui";
 import { Copy } from "../components/icons";
-
-function wordCount(s: string): number {
-  return s.trim().split(/\s+/).filter(Boolean).length;
-}
 
 function counterLabel(raw: string, out: string | undefined): string {
   if (out === undefined) return "";
   if (raw.trim() === out.trim()) return "UNCHANGED";
-  const n = wordCount(raw) - wordCount(out);
-  return n >= 1 ? `−${n} WORDS` : "EDITED";
+  return diffLabel(raw, out, "WORDS") ?? "UNCHANGED";
 }
 
-export function Playground() {
+/** Host shown next to the AI column eyebrow, e.g. "AI · localhost:11434". */
+function hostFromUrl(url: string): string {
+  try {
+    return new URL(url).host || url;
+  } catch {
+    return url || "not set";
+  }
+}
+
+export function Playground({
+  settings,
+  onError,
+}: {
+  settings: Settings;
+  onError?: (message: string) => void;
+}) {
   const [input, setInput] = useState("");
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<CleanupPreview | null>(null);
+  const [runError, setRunError] = useState<string | null>(null);
   const [copied, setCopied] = useState<"basic" | "ai" | null>(null);
 
   const run = async () => {
     if (!input.trim() || running) return;
     setRunning(true);
+    setRunError(null);
     try {
       setResult(await api.cleanupPreview(input));
+    } catch (err) {
+      setRunError(String(err));
+      onError?.(String(err));
     } finally {
       setRunning(false);
     }
   };
+
+  const aiError = runError ?? result?.aiError;
 
   const copy = async (which: "basic" | "ai", text: string) => {
     await api.copyText(text);
@@ -83,8 +101,8 @@ export function Playground() {
 
         <Card>
           <div className="box-eyebrow-row">
-            <h2 className={`box-eyebrow${result?.aiError ? " box-eyebrow--err" : ""}`}>
-              {result?.aiError ? "AI · FAILED" : "AI"}
+            <h2 className={`box-eyebrow${aiError ? " box-eyebrow--err" : ""}`}>
+              {aiError ? "AI · FAILED" : `AI · ${hostFromUrl(settings.ai.baseUrl)}`}
             </h2>
             {result?.ai && (
               <Button variant="icon" aria-label="Copy AI output" onClick={() => copy("ai", result.ai!)}>
@@ -92,9 +110,9 @@ export function Playground() {
               </Button>
             )}
           </div>
-          {result?.aiError ? (
+          {aiError ? (
             <>
-              <p className="playground-column-body--err-msg">{result.aiError}</p>
+              <p className="playground-column-body--err-msg">{aiError}</p>
               <p className="playground-column-body--err-note">Basic output would be used.</p>
             </>
           ) : (

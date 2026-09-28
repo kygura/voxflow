@@ -273,7 +273,7 @@ textarea {
   border-top: var(--bw) solid var(--line);
 }
 
-.field:first-child {
+.box-eyebrow + .field {
   border-top: none;
 }
 
@@ -403,6 +403,16 @@ textarea {
   background: transparent;
   border-color: transparent;
   color: var(--text-1);
+}
+
+.btn--xs {
+  height: 20px;
+  min-width: 0;
+  padding: 0 6px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 .btn--icon:hover {

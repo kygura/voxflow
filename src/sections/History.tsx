@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { HistoryEntry } from "../lib/ipc";
 import { api, events } from "../lib/api";
 import { relativeTime } from "../lib/time";
+import { diffLabel } from "../lib/text";
 import {
   Button,
   EmptyState,
@@ -13,14 +14,9 @@ import {
 } from "../components/ui";
 import { Check, Clipboard, Trash } from "../components/icons";
 
-function wordCount(s: string): number {
-  return s.trim().split(/\s+/).filter(Boolean).length;
-}
-
 function removedCountLabel(raw: string | undefined, text: string): string | null {
-  if (!raw || raw === text) return null;
-  const n = wordCount(raw) - wordCount(text);
-  return n >= 1 ? `−${n} FILLERS` : "EDITED";
+  if (!raw) return null;
+  return diffLabel(raw, text, "FILLERS");
 }
 
 export function History({
@@ -209,9 +205,11 @@ function HistoryRow({
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
           onToggleExpand();
+        } else if (e.key === "Escape" && rawOpen) {
+          onToggleRaw();
         } else if (e.key === "Escape" && expanded) {
           onToggleExpand();
-        } else if (e.key.toLowerCase() === "r" && entry.raw) {
+        } else if (e.key.toLowerCase() === "r" && entry.raw && !e.ctrlKey && !e.metaKey) {
           onToggleRaw();
         } else if (e.key === "Delete") {
           setDeleting(true);
@@ -234,7 +232,7 @@ function HistoryRow({
         {entry.raw && (
           <button
             type="button"
-            className="btn btn--ghost"
+            className="btn btn--ghost btn--xs"
             aria-pressed={rawOpen}
             onClick={(e) => {
               e.stopPropagation();

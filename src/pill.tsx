@@ -12,6 +12,7 @@ import { forceDictationState, startDemoLoop } from "./lib/mock";
 import { Waveform } from "./components/Waveform";
 import { Sweep } from "./components/ui";
 import { applyTheme } from "./lib/theme";
+import { diffLabel } from "./lib/text";
 
 // DESIGN.md §2.3/§2.8 auto-hide durations, keyed by state + done/error variant.
 const AUTO_HIDE_MS: Record<string, number> = {
@@ -34,10 +35,6 @@ function useReducedMotion() {
   return reduced;
 }
 
-function wordCount(s: string): number {
-  return s.trim().split(/\s+/).filter(Boolean).length;
-}
-
 /** DESIGN.md §2.7 — removed-count note computed from raw vs cleaned text. */
 function doneNote(
   raw: string | undefined,
@@ -45,9 +42,13 @@ function doneNote(
   message: string | undefined,
 ): { label: string; err?: boolean } | null {
   if (message?.includes("AI cleanup failed")) return { label: "AI FAILED · BASIC", err: true };
-  if (!raw || raw === text) return null;
-  const n = wordCount(raw) - wordCount(text ?? "");
-  return n >= 1 ? { label: `−${n} FILLERS` } : { label: "EDITED" };
+  if (!raw) return null;
+  const label = diffLabel(raw, text ?? "", "FILLERS");
+  return label ? { label } : null;
+}
+
+function ellipsize(s: string, max: number): string {
+  return s.length > max ? s.slice(0, max) + "…" : s;
 }
 
 function formatTimer(ms: number): string {
@@ -123,15 +124,23 @@ function Pill() {
   }, []);
 
   // Timer: starts at first recording event, stops at the first non-recording state.
+  // Self-correcting setTimeout chain (rather than a plain setInterval) so each tick
+  // lands on a whole second relative to `start` instead of drifting over time.
   useEffect(() => {
-    if (state === "recording") {
-      if (recordingStart.current === null) recordingStart.current = Date.now();
-      const start = recordingStart.current;
-      setTimerText(formatTimer(Date.now() - start));
-      const id = setInterval(() => setTimerText(formatTimer(Date.now() - start)), 1000);
-      return () => clearInterval(id);
+    if (state !== "recording") {
+      recordingStart.current = null;
+      return;
     }
-    recordingStart.current = null;
+    if (recordingStart.current === null) recordingStart.current = Date.now();
+    const start = recordingStart.current;
+    let timer: ReturnType<typeof setTimeout>;
+    const tick = () => {
+      const elapsed = Date.now() - start;
+      setTimerText(formatTimer(elapsed));
+      timer = setTimeout(tick, 1000 - (elapsed % 1000));
+    };
+    tick();
+    return () => clearTimeout(timer);
   }, [state]);
 
   useEffect(() => {
@@ -197,10 +206,8 @@ function Pill() {
 
           <div className="pill-content" key={state}>
             {isRecording && <Waveform levelRef={levelRef} reducedMotion={reducedMotion} />}
-            {(isTranscribing || isCleaning) && <Sweep width={188} />}
-            {isError && (
-              <span className="pill-error-text">{(message ?? "Something went wrong").slice(0, 48)}</span>
-            )}
+            {(isTranscribing || isCleaning) && <Sweep />}
+            {isError && <span className="pill-error-text">{ellipsize(message ?? "Something went wrong", 48)}</span>}
             <span role="status" aria-live="polite" className="sr-only">
               {srText}
             </span>
