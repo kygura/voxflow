@@ -41,15 +41,22 @@ pub struct AppState {
 struct TrayDictationItem(MenuItem<Wry>);
 
 const KEYRING_SERVICE: &str = "voxflow";
-const KEYRING_USER: &str = "remote-api-key";
+/// Keyring account of the transcription server key.
+pub const KEY_REMOTE: &str = "remote-api-key";
+/// Keyring account of the AI cleanup server key (separate from transcription).
+pub const KEY_AI: &str = "ai-api-key";
 
 /// Keyring errors never contain the secret. Linux without a Secret Service → Err, not a crash.
-pub fn keyring_entry() -> Result<keyring::Entry, String> {
-    keyring::Entry::new(KEYRING_SERVICE, KEYRING_USER).map_err(|e| format!("keyring unavailable: {e}"))
+pub fn keyring_entry(account: &str) -> Result<keyring::Entry, String> {
+    keyring::Entry::new(KEYRING_SERVICE, account).map_err(|e| format!("keyring unavailable: {e}"))
 }
 
 pub fn api_key() -> Option<String> {
-    keyring_entry().ok()?.get_password().ok()
+    keyring_entry(KEY_REMOTE).ok()?.get_password().ok()
+}
+
+pub fn ai_key() -> Option<String> {
+    keyring_entry(KEY_AI).ok()?.get_password().ok()
 }
 
 pub fn show_main(app: &AppHandle) {
@@ -64,7 +71,7 @@ pub fn update_tray(app: &AppHandle, phase: Phase) {
     if let Some(item) = app.try_state::<TrayDictationItem>() {
         let _ = item.0.set_text(match phase {
             Phase::Recording => "Stop dictation",
-            Phase::Transcribing => "Cancel transcription",
+            Phase::Transcribing | Phase::Cleaning => "Cancel transcription",
             _ => "Start dictation",
         });
     }
@@ -102,7 +109,9 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         status.last_error = Some(msg);
     }
 
-    let first_run = settings.backend == Backend::Local
+    let demo = std::env::args().any(|a| a == "--demo");
+    let first_run = !demo
+        && settings.backend == Backend::Local
         && voxflow_core::models::model_path(&models_dir, &settings.local_model).is_ok_and(|p| !p.is_file());
 
     let (tx, rx) = mpsc::channel();
@@ -119,6 +128,13 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         hotkey_down: AtomicBool::new(false),
         tx: tx.clone(),
     });
+    if demo {
+        let tx = tx.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_secs(1));
+            let _ = tx.send(Input::Demo(5));
+        });
+    }
     dictation::spawn(handle.clone(), tx, rx);
 
     // Main window is `create: false` in tauri.conf so first run can open it on Transcription.
@@ -179,6 +195,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show_main(app)))
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, shortcut, event| {
@@ -227,6 +244,12 @@ pub fn run() {
             commands::cancel_dictation,
             commands::get_status,
             commands::open_data_dir,
+            commands::set_ai_key,
+            commands::clear_ai_key,
+            commands::test_ai,
+            commands::cleanup_preview,
+            commands::transcribe_file,
+            commands::preview_overlay,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

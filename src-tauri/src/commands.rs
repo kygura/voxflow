@@ -1,17 +1,18 @@
 //! IPC commands (SPEC "IPC surface"). All errors are plain strings.
 
 use crate::dictation::{Input, Phase};
-use crate::{api_key, keyring_entry, AppState};
+use crate::{ai_key, api_key, keyring_entry, AppState, KEY_AI, KEY_REMOTE};
 use serde::Serialize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
+use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
 use voxflow_core::history::HistoryEntry;
 use voxflow_core::models::{self, ModelInfo};
 use voxflow_core::settings::Settings;
-use voxflow_core::{audio, output, transcribe::remote};
+use voxflow_core::{audio, cleanup, output, transcribe::remote};
 
 type Res<T = ()> = Result<T, String>;
 
@@ -28,6 +29,17 @@ pub struct Status {
     #[serde(skip_serializing_if = "Option::is_none")]
     last_error: Option<String>,
     has_api_key: bool,
+    has_ai_key: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CleanupPreview {
+    basic: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    ai: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    ai_error: Option<String>,
 }
 
 #[derive(Serialize, Clone)]
@@ -81,21 +93,39 @@ pub fn save_settings(app: AppHandle, state: State<AppState>, settings: Settings)
     Ok(())
 }
 
-#[tauri::command]
-pub fn set_api_key(key: String) -> Res {
+fn set_key(account: &str, key: &str) -> Res {
     let key = key.trim();
     if key.is_empty() {
         return Err("API key is empty".into());
     }
-    keyring_entry()?.set_password(key).map_err(err)
+    keyring_entry(account)?.set_password(key).map_err(err)
+}
+
+fn clear_key(account: &str) -> Res {
+    match keyring_entry(account)?.delete_credential() {
+        Err(keyring::Error::NoEntry) | Ok(()) => Ok(()),
+        Err(e) => Err(err(e)),
+    }
+}
+
+#[tauri::command]
+pub fn set_api_key(key: String) -> Res {
+    set_key(KEY_REMOTE, &key)
 }
 
 #[tauri::command]
 pub fn clear_api_key() -> Res {
-    match keyring_entry()?.delete_credential() {
-        Err(keyring::Error::NoEntry) | Ok(()) => Ok(()),
-        Err(e) => Err(err(e)),
-    }
+    clear_key(KEY_REMOTE)
+}
+
+#[tauri::command]
+pub fn set_ai_key(key: String) -> Res {
+    set_key(KEY_AI, &key)
+}
+
+#[tauri::command]
+pub fn clear_ai_key() -> Res {
+    clear_key(KEY_AI)
 }
 
 #[tauri::command]
@@ -156,6 +186,76 @@ pub async fn test_remote(app: AppHandle) -> Res<String> {
         .map_err(err)
 }
 
+/// Async + blocking pool: up to the 20 s AI timeout.
+#[tauri::command]
+pub async fn test_ai(app: AppHandle) -> Res<String> {
+    let cfg = app.state::<AppState>().settings.lock().unwrap().ai.clone();
+    tauri::async_runtime::spawn_blocking(move || cleanup::test_ai(&cfg, ai_key().as_deref()))
+        .await
+        .map_err(err)?
+        .map_err(err)
+}
+
+/// Basic output always; AI attempted whenever an AI server URL is configured.
+#[tauri::command]
+pub async fn cleanup_preview(app: AppHandle, text: String) -> Res<CleanupPreview> {
+    let s = app.state::<AppState>().settings.lock().unwrap().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let basic = cleanup::basic(&text, &s.language);
+        let (ai, ai_error) = if s.ai.base_url.trim().is_empty() {
+            (None, Some("AI server not configured".to_owned()))
+        } else {
+            match cleanup::ai(&text, &s.language, &s.ai, ai_key().as_deref()) {
+                Ok(t) => (Some(t), None),
+                Err(e) => (None, Some(err(e))),
+            }
+        };
+        CleanupPreview { basic, ai, ai_error }
+    })
+    .await
+    .map_err(err)
+}
+
+fn ensure_idle(state: &AppState) -> Res {
+    match state.status.lock().unwrap().phase {
+        Phase::Recording | Phase::Transcribing | Phase::Cleaning => {
+            Err("Busy: finish or cancel the current dictation first".into())
+        }
+        _ => Ok(()),
+    }
+}
+
+/// Native picker, then the dictation pipeline (clipboard only, no auto-paste). Cancel → Ok.
+#[tauri::command]
+pub async fn transcribe_file(app: AppHandle) -> Res {
+    ensure_idle(&app.state::<AppState>())?;
+    let picker = app.clone();
+    // blocking_pick_file must not run on the main thread; the blocking pool is fine.
+    let picked = tauri::async_runtime::spawn_blocking(move || {
+        let mut dialog = picker.dialog().file().add_filter("Audio", &["wav", "mp3", "m4a", "ogg", "flac"]);
+        if let Some(main) = picker.get_webview_window("main") {
+            dialog = dialog.set_parent(&main);
+        }
+        dialog.blocking_pick_file()
+    })
+    .await
+    .map_err(err)?;
+    let Some(file) = picked else { return Ok(()) };
+    let path = file.into_path().map_err(err)?;
+    let state = app.state::<AppState>();
+    ensure_idle(&state)?; // a dictation may have started while the picker was open
+    let _ = state.tx.send(Input::File(path));
+    Ok(())
+}
+
+/// One demo cycle of the pill (no mic, clipboard, paste or history).
+#[tauri::command]
+pub fn preview_overlay(state: State<AppState>) -> Res {
+    ensure_idle(&state)?;
+    let _ = state.tx.send(Input::Demo(1));
+    Ok(())
+}
+
 #[tauri::command]
 pub fn get_history(state: State<AppState>) -> Vec<HistoryEntry> {
     state.history.lock().unwrap().entries().to_vec()
@@ -198,12 +298,14 @@ pub fn cancel_dictation(state: State<AppState>) {
 #[tauri::command]
 pub fn get_status(state: State<AppState>) -> Status {
     let has_api_key = api_key().is_some();
+    let has_ai_key = ai_key().is_some();
     let st = state.status.lock().unwrap();
     Status {
         state: st.phase,
         message: st.message.clone(),
         last_error: st.last_error.clone(),
         has_api_key,
+        has_ai_key,
     }
 }
 
