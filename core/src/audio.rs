@@ -26,11 +26,16 @@ pub fn list_input_devices() -> Result<Vec<String>> {
         .collect())
 }
 
-/// True when no 30 ms window reaches speech level.
+/// The start cue (90 ms tone plus output latency) can leak into the mic. With sounds on, this
+/// much of the recording's head is ignored by the silence checks (the audio itself is kept).
+pub const CUE_SKIP: Duration = Duration::from_millis(200);
+
+/// True when no 30 ms window after the first `skip` of 16 kHz audio reaches speech level.
 ///
 /// ponytail: fixed RMS threshold (0.005 ≈ -46 dBFS); a real VAD if quiet mics get dropped.
-pub fn is_probably_silent(samples: &[f32]) -> bool {
-    !samples.chunks(480).any(|w| rms(w) > 0.005)
+pub fn is_probably_silent(samples: &[f32], skip: Duration) -> bool {
+    let skip = (16 * skip.as_millis() as usize).min(samples.len());
+    !samples[skip..].chunks(480).any(|w| rms(w) > 0.005)
 }
 
 fn rms(s: &[f32]) -> f32 {
@@ -62,10 +67,20 @@ pub const SILENCE_LEVEL: f32 = 0.08;
 #[derive(Default)]
 pub struct SilenceDetector {
     quiet: u64,
+    skip: u64,
 }
 
 impl SilenceDetector {
+    /// Ignores the blocks covering the first `skip` (see [`CUE_SKIP`]).
+    pub fn skipping(skip: Duration) -> Self {
+        Self { quiet: 0, skip: skip.as_millis() as u64 / LEVEL_BLOCK_MS }
+    }
+
     pub fn push(&mut self, level: f32) -> bool {
+        if self.skip > 0 {
+            self.skip -= 1;
+            return false;
+        }
         self.quiet = if level < SILENCE_LEVEL { self.quiet + 1 } else { 0 };
         self.quiet == SILENCE_STOP.as_millis() as u64 / LEVEL_BLOCK_MS
     }
@@ -285,13 +300,31 @@ mod tests {
 
     #[test]
     fn silence_detection() {
-        assert!(is_probably_silent(&vec![0.0; 16_000]));
-        assert!(is_probably_silent(&vec![0.001; 16_000]));
+        let none = Duration::ZERO;
+        assert!(is_probably_silent(&vec![0.0; 16_000], none));
+        assert!(is_probably_silent(&vec![0.001; 16_000], none));
+        assert!(is_probably_silent(&[], CUE_SKIP));
         let mut speech = vec![0.0; 16_000];
         for (i, s) in speech[8_000..8_960].iter_mut().enumerate() {
             *s = 0.2 * (i as f32 * 0.1).sin();
         }
-        assert!(!is_probably_silent(&speech));
+        assert!(!is_probably_silent(&speech, none));
+        assert!(!is_probably_silent(&speech, CUE_SKIP));
+        // Start cue captured by the mic, then silence: silent once the head is skipped.
+        let mut cue = vec![0.0; 16_000];
+        cue[..16 * 90].copy_from_slice(&tone(880.0, 1320.0, 90));
+        assert!(!is_probably_silent(&cue, none));
+        assert!(is_probably_silent(&cue, CUE_SKIP));
+    }
+
+    #[test]
+    fn silence_detector_skips_cue_blocks() {
+        let blocks = (SILENCE_STOP.as_millis() as u64 / LEVEL_BLOCK_MS) as usize;
+        let skip = (CUE_SKIP.as_millis() as u64 / LEVEL_BLOCK_MS) as usize; // 8
+        let mut d = SilenceDetector::skipping(CUE_SKIP);
+        assert!((0..skip).all(|_| !d.push(1.0))); // loud cue neither counts nor resets
+        assert!((0..blocks - 1).all(|_| !d.push(0.0)));
+        assert!(d.push(0.0));
     }
 
     #[test]

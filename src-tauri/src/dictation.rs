@@ -65,6 +65,19 @@ pub fn decide(mode: HotkeyMode, phase: Phase, hands_free: bool, pressed: bool, h
     }
 }
 
+/// Guards for worker-timer and paste-last inputs (other inputs: true). `gen`, `phase`,
+/// `hands_free`, `heard` are the worker's current values.
+fn admits(input: &Input, gen: u64, phase: Phase, hands_free: bool, heard: bool) -> bool {
+    let recording = phase == Phase::Recording;
+    match *input {
+        Input::Heard(g) => g == gen,
+        Input::Warmup(g) => g == gen && recording && !heard,
+        Input::Silence(g) => g == gen && recording && hands_free,
+        Input::PasteLast => !matches!(phase, Phase::Recording | Phase::Transcribing | Phase::Cleaning),
+        _ => true,
+    }
+}
+
 pub enum Input {
     Key { pressed: bool, at: Instant },
     Esc,
@@ -244,6 +257,7 @@ impl Worker {
             }
         }
         let active = matches!(self.phase, Phase::Recording | Phase::Transcribing | Phase::Cleaning);
+        let ok = admits(&input, self.gen, self.phase, self.hands_free, self.heard);
         match input {
             Input::Key { pressed, at } => {
                 let held = at.saturating_duration_since(self.pressed_at);
@@ -267,14 +281,10 @@ impl Worker {
                 _ => self.start(true, Instant::now()),
             },
             Input::AutoStop(gen) if gen == self.gen && self.phase == Phase::Recording => self.stop(),
-            Input::Heard(gen) if gen == self.gen => self.heard = true,
-            Input::Warmup(gen) if gen == self.gen && self.phase == Phase::Recording && !self.heard => {
-                self.fail("Microphone not responding".into())
-            }
-            Input::Silence(gen) if gen == self.gen && self.phase == Phase::Recording && self.hands_free => {
-                self.stop()
-            }
-            Input::PasteLast if !active => self.paste_last(),
+            Input::Heard(_) if ok => self.heard = true,
+            Input::Warmup(_) if ok => self.fail("Microphone not responding".into()),
+            Input::Silence(_) if ok => self.stop(),
+            Input::PasteLast if ok => self.paste_last(),
             Input::Cleaning(gen) if gen == self.gen && self.phase == Phase::Transcribing => {
                 self.emit(Phase::Cleaning, None)
             }
@@ -322,7 +332,8 @@ impl Worker {
         self.gen += 1;
         self.heard = false;
         let (app, tx, gen) = (self.app.clone(), self.tx.clone(), self.gen);
-        let (mut heard, mut silence) = (false, SilenceDetector::default());
+        let skip = if s.sounds { audio::CUE_SKIP } else { Duration::ZERO };
+        let (mut heard, mut silence) = (false, SilenceDetector::skipping(skip));
         let rec = Recorder::start(s.input_device.as_deref(), move |level| {
             let _ = app.emit_to("pill", "dictation://level", LevelEvent { level });
             if !heard {
@@ -355,10 +366,12 @@ impl Worker {
             Ok(s) => s,
             Err(e) => return self.fail(format!("{e:#}")),
         };
-        if self.settings().sounds {
+        let sounds = self.settings().sounds;
+        if sounds {
             self.playback = Some(audio::play(audio::tone(1320.0, 880.0, 120)));
         }
-        if samples.len() < MIN_SAMPLES || is_probably_silent(&samples) {
+        let skip = if sounds { audio::CUE_SKIP } else { Duration::ZERO };
+        if samples.len() < MIN_SAMPLES || is_probably_silent(&samples, skip) {
             return self.go_idle();
         }
         self.emit(Phase::Transcribing, None);
@@ -713,6 +726,31 @@ mod tests {
         ];
         for (mode, phase, hf, pressed, held, want) in table {
             assert_eq!(decide(mode, phase, hf, pressed, held), want, "{mode:?} {phase:?} hf={hf} pressed={pressed} {held:?}");
+        }
+    }
+
+    #[test]
+    fn input_guards() {
+        #[rustfmt::skip]
+        let table = [
+            // input, phase, hands_free, heard → admitted (worker gen is 2)
+            (Input::Heard(2), Idle, false, false, true),
+            (Input::Heard(1), Recording, false, false, false),
+            (Input::Warmup(2), Recording, false, false, true),
+            (Input::Warmup(2), Recording, false, true, false),
+            (Input::Warmup(2), Transcribing, false, false, false),
+            (Input::Warmup(1), Recording, false, false, false),
+            (Input::Silence(2), Recording, true, true, true),
+            (Input::Silence(2), Recording, false, true, false),
+            (Input::Silence(2), Transcribing, true, true, false),
+            (Input::Silence(1), Recording, true, true, false),
+            (Input::PasteLast, Idle, false, false, true),
+            (Input::PasteLast, Done, false, false, true),
+            (Input::PasteLast, Recording, false, false, false),
+            (Input::PasteLast, Cleaning, false, false, false),
+        ];
+        for (input, phase, hf, heard, want) in table {
+            assert_eq!(admits(&input, 2, phase, hf, heard), want, "{phase:?} hf={hf} heard={heard}");
         }
     }
 }

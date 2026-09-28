@@ -70,20 +70,35 @@ fn parse_hotkey(hotkey: &str) -> Res<Shortcut> {
     Ok(s)
 }
 
-/// Unregister `old` hotkeys, register `new` ones ("" = none). On failure the old set is back.
-fn swap_hotkeys<'a>(gs: &GlobalShortcut<Wry>, old: [&'a str; 2], new: [&'a str; 2]) -> Res {
+/// Unregister `old` hotkeys, register `new` ones ("" = none). On failure the old set is
+/// re-registered; failures of that restore are appended to the error.
+fn swap_with<'a, E: std::fmt::Display>(
+    mut register: impl FnMut(&'a str) -> Result<(), E>,
+    mut unregister: impl FnMut(&'a str) -> Result<(), E>,
+    old: [&'a str; 2],
+    new: [&'a str; 2],
+) -> Res {
     let set = |keys: [&'a str; 2]| keys.into_iter().filter(|k| !k.is_empty());
-    set(old).for_each(|k| drop(gs.unregister(k)));
+    set(old).for_each(|k| drop(unregister(k)));
     let mut done = Vec::new();
     for k in set(new) {
-        if let Err(e) = gs.register(k) {
-            done.into_iter().for_each(|d: &str| drop(gs.unregister(d)));
-            set(old).for_each(|k| drop(gs.register(k)));
-            return Err(format!("Could not register hotkey {k}: {e}"));
+        if let Err(e) = register(k) {
+            done.into_iter().for_each(|d| drop(unregister(d)));
+            let mut msg = format!("Could not register hotkey {k}: {e}");
+            for o in set(old) {
+                if let Err(e) = register(o) {
+                    msg += &format!("; restoring hotkey {o} failed: {e}");
+                }
+            }
+            return Err(msg);
         }
         done.push(k);
     }
     Ok(())
+}
+
+fn swap_hotkeys<'a>(gs: &GlobalShortcut<Wry>, old: [&'a str; 2], new: [&'a str; 2]) -> Res {
+    swap_with(|k| gs.register(k), |k| gs.unregister(k), old, new)
 }
 
 /// Validate, re-register the hotkeys if they changed (reverting on failure), then persist.
@@ -102,14 +117,20 @@ pub fn save_settings(app: AppHandle, state: State<AppState>, settings: Settings)
     let gs = app.global_shortcut();
     if changed {
         swap_hotkeys(gs, old, new)?;
+        // Right away: the handler routes the new paste-last key by this id.
+        state.paste_last_id.store(crate::shortcut_id(new[1]), Ordering::Relaxed);
     }
     if let Err(e) = settings.save(&state.settings_path) {
+        let mut msg = err(e);
         if changed {
-            let _ = swap_hotkeys(gs, new, old);
+            state.paste_last_id.store(crate::shortcut_id(old[1]), Ordering::Relaxed);
+            if let Err(r) = swap_hotkeys(gs, new, old) {
+                msg = format!("{msg}; reverting hotkeys failed: {r}");
+                state.status.lock().unwrap().last_error = Some(msg.clone());
+            }
         }
-        return Err(err(e));
+        return Err(msg);
     }
-    state.paste_last_id.store(crate::shortcut_id(&settings.paste_last_hotkey), Ordering::Relaxed);
     *current = settings;
     drop(current);
     let _ = app.emit("settings://changed", ());
@@ -349,6 +370,50 @@ pub fn open_data_dir(app: AppHandle, state: State<AppState>) -> Res {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn swap_orderings() {
+        use std::cell::RefCell;
+        use std::collections::BTreeSet;
+        type Case<'a> = (&'a str, [&'a str; 2], [&'a str; 2], &'a [&'a str], bool, &'a [&'a str], &'a str);
+        #[rustfmt::skip]
+        let table: [Case; 6] = [
+            // name, old, new, failing keys, ok, registered after, log
+            ("new[1] fails", ["A", "B"], ["C", "D"], &["D"], false, &["A", "B"], "-A -B +C -C +A +B"),
+            ("new[0] fails", ["A", "B"], ["C", "D"], &["C"], false, &["A", "B"], "-A -B +A +B"),
+            ("role swap", ["A", "B"], ["B", "A"], &[], true, &["A", "B"], "-A -B +B +A"),
+            ("disable paste-last", ["A", "B"], ["A", ""], &[], true, &["A"], "-A -B +A"),
+            ("paste-last stays off", ["A", ""], ["C", ""], &[], true, &["C"], "-A +C"),
+            ("restore fails", ["A", "B"], ["C", "D"], &["D", "B"], false, &["A"], "-A -B +C -C +A"),
+        ];
+        for (name, old, new, failing, ok, after, want_log) in table {
+            let reg: RefCell<BTreeSet<&str>> = RefCell::new(old.into_iter().filter(|k| !k.is_empty()).collect());
+            let log = RefCell::new(Vec::new());
+            let res = swap_with(
+                |k| {
+                    if failing.contains(&k) {
+                        return Err("taken");
+                    }
+                    log.borrow_mut().push(format!("+{k}"));
+                    reg.borrow_mut().insert(k);
+                    Ok(())
+                },
+                |k| {
+                    log.borrow_mut().push(format!("-{k}"));
+                    reg.borrow_mut().remove(k);
+                    Ok(())
+                },
+                old,
+                new,
+            );
+            assert_eq!(res.is_ok(), ok, "{name}: {res:?}");
+            assert_eq!(reg.into_inner().into_iter().collect::<Vec<_>>(), after, "{name}");
+            assert_eq!(log.into_inner().join(" "), want_log, "{name}");
+            if name == "restore fails" {
+                assert_eq!(res.unwrap_err(), "Could not register hotkey D: taken; restoring hotkey B failed: taken");
+            }
+        }
+    }
 
     #[test]
     fn idle_check_allows_demo_blocks_real_work() {
