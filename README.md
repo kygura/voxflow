@@ -78,8 +78,7 @@ rustup target add x86_64-pc-windows-msvc
 ./scripts/build-windows.sh                              # → target/x86_64-pc-windows-msvc/release/voxflow.exe
 ./scripts/build-windows.sh /mnt/c/Users/<you>/Desktop   # also copies VoxFlow.exe (stops a running copy first)
 ```
-Override tool locations with `XTOOL=` / `SYSROOT=` if you unpacked them elsewhere. The exe
-needs only the VC++ runtime and WebView2, both present on Windows 11.
+The exe needs only the VC++ runtime and WebView2, both present on Windows 11.
 
 ## Build on Windows (native, alternative)
 
