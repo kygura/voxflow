@@ -6,12 +6,13 @@ import { CardTitle, KeyCombo, SectionHeader } from "../components/ui";
 const SHORTCUTS: [string, string][] = [
   ["Ctrl Shift Space", "Start / stop dictation (anywhere)"],
   ["Esc", "Cancel while recording or transcribing (anywhere)"],
-  ["Ctrl 1 … Ctrl 6", "Switch section"],
+  ["Ctrl 1 … Ctrl 7", "Switch section"],
   ["Ctrl F", "Filter history"],
   ["Ctrl W", "Hide window to tray"],
-  ["Enter", "Expand history row / activate control"],
+  ["Enter", "Expand history row / add or save a dictionary entry"],
   ["R", "Toggle raw peek on focused history row"],
-  ["Delete", "Delete focused history row"],
+  ["Ctrl C", "Copy focused history / dictionary row"],
+  ["Delete", "Delete focused history / dictionary row"],
 ];
 
 function cleanupSummary(settings: Settings): string {
@@ -56,6 +57,12 @@ export function About({ settings, status }: { settings: Settings; status: Status
         <div className="about-row">
           <dt>Cleanup</dt>
           <dd>{cleanupSummary(settings)}</dd>
+        </div>
+        <div className="about-row">
+          <dt>Dictionary</dt>
+          <dd>
+            {settings.dictionary.length} {settings.dictionary.length === 1 ? "entry" : "entries"}
+          </dd>
         </div>
         <div className="about-row">
           <dt>Last error</dt>

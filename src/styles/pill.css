@@ -32,13 +32,18 @@ body {
   border: 0;
 }
 
+:focus-visible {
+  outline: var(--bw-focus) solid var(--focus);
+  outline-offset: 2px;
+  border-radius: inherit;
+}
+
+/* --- Root / window --- */
+
 .pill-root {
+  position: relative;
   width: 100%;
   height: 100%;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  padding-bottom: 10px;
 }
 
 .pill-root--hidden {
@@ -46,149 +51,168 @@ body {
   pointer-events: none;
 }
 
+/* --- Pill body (360 x 56, full-radius capsule, never resizes) --- */
+
 .pill-body {
-  width: 380px;
-  height: 64px;
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  width: 360px;
+  height: 56px;
   background: var(--pill-bg);
   border: 1px solid var(--pill-line);
-  border-radius: var(--r-pill);
+  border-radius: var(--r-full);
+  box-shadow: var(--shadow-float);
   display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
+  align-items: center;
+  padding: 0 16px 0 20px;
   cursor: default;
   opacity: 0;
-  transform: translateY(6px);
+  transform: translateX(-50%) translateY(8px);
   animation: pill-in var(--dur-2) var(--ease-out) forwards;
-  transition: height var(--dur-2) var(--ease-out);
 }
 
-.pill-body--tall {
-  height: 92px;
-}
-
-.pill-body--recording {
+.pill-body[data-state="recording"] {
   cursor: pointer;
 }
 
 @keyframes pill-in {
   from {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateX(-50%) translateY(8px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.pill-root--hiding .pill-body {
+  animation: pill-out var(--dur-2) var(--ease-in) forwards;
+}
+
+@keyframes pill-out {
+  from {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-50%) translateY(4px);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pill-body {
-    transform: none;
-  }
   @keyframes pill-in {
     from {
       opacity: 0;
+      transform: translateX(-50%);
     }
     to {
       opacity: 1;
+      transform: translateX(-50%);
+    }
+  }
+  @keyframes pill-out {
+    from {
+      opacity: 1;
+      transform: translateX(-50%);
+    }
+    to {
+      opacity: 0;
+      transform: translateX(-50%);
     }
   }
 }
 
-/* --- Row 1: mark, label, content, cap/note --- */
+/* --- Dot --- */
 
-.pill-row1 {
-  height: 64px;
+.pill-dot {
   flex: none;
-  display: flex;
-  align-items: center;
-  padding: 0 var(--sp-5);
-}
-
-/* DESIGN.md §2.2 spacing: 16 / mark / 8 / label / 12 / content / 12 / cap / 16.
-   Not a uniform flex gap — mark→label is 8px, label→content and content→cap
-   are 12px — so the gaps are per-element margins instead. */
-.pill-mark {
-  width: 8px;
-  height: 8px;
-  flex: none;
-  border-radius: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: var(--r-full);
+  margin-right: 10px;
   background: transparent;
-  margin-right: var(--sp-3);
 }
 
-.pill-mark--recording {
+.pill-dot[data-state="recording"] {
   background: var(--accent);
 }
 
-.pill-mark--transcribing,
-.pill-mark--cleaning {
+.pill-dot[data-state="transcribing"],
+.pill-dot[data-state="cleaning"] {
   background: transparent;
-  border: 1px solid var(--accent);
+  border: 2px solid var(--accent);
 }
 
-.pill-mark--done {
+.pill-dot[data-state="done"] {
   background: var(--accent-fill);
 }
 
-.pill-mark--error {
+.pill-dot[data-state="error"] {
   background: var(--err);
 }
 
-.pill-mark--blink {
-  animation: pill-blink 1s steps(1) infinite;
+/* Push-to-talk: soft pulse. Hands-free (toggle / absent mode): steady. */
+.pill-body[data-state="recording"][data-mode="push_to_talk"] .pill-dot {
+  animation: pill-pulse 1200ms ease-in-out infinite;
 }
 
-@keyframes pill-blink {
+@keyframes pill-pulse {
   0%,
-  49.99% {
+  100% {
     opacity: 1;
   }
-  50%,
-  100% {
-    opacity: 0.35;
+  50% {
+    opacity: 0.45;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pill-mark--blink {
+  .pill-body[data-state="recording"][data-mode="push_to_talk"] .pill-dot {
     animation: none;
     opacity: 1;
   }
 }
 
+/* --- Label --- */
+
 .pill-label {
   flex: none;
-  min-width: 44px;
+  min-width: 52px;
   width: auto;
-  margin-right: var(--sp-4);
-  font-family: var(--font-mono);
-  font-size: var(--fs-xs);
+  margin-right: 12px;
+  font-family: var(--font-sans);
+  font-size: var(--fs-pill);
+  line-height: var(--lh-pill);
   font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
   color: var(--text-1);
   font-variant-numeric: tabular-nums;
 }
 
-.pill-body--recording .pill-label {
-  font-size: var(--fs-timer);
-  text-transform: none;
-  letter-spacing: normal;
+.pill-body[data-state="recording"]:not([data-warmup]) .pill-label,
+.pill-body[data-state="transcribing"] .pill-label,
+.pill-body[data-state="cleaning"] .pill-label {
+  color: var(--text-0);
 }
 
 .pill-label[data-tone="accent"] {
   color: var(--accent);
+  font-weight: 600;
 }
 
 .pill-label[data-tone="err"] {
   color: var(--err);
+  font-weight: 600;
 }
+
+/* --- Content slot: warm-up dots / waveform / sweep / error text --- */
 
 .pill-content {
   flex: 1;
   min-width: 0;
-  height: 32px;
+  height: 28px;
   display: flex;
   align-items: center;
   animation: pill-content-fade var(--dur-2) var(--ease-out);
@@ -205,53 +229,118 @@ body {
 
 .pill-waveform {
   width: 100%;
-  height: 32px;
+  height: 28px;
   display: block;
 }
 
 .pill-error-text {
   font-family: var(--font-sans);
   font-size: var(--fs-md);
+  line-height: var(--lh-md);
   color: var(--text-0);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+/* --- Warm-up dots (DESIGN.md §2.5) --- */
+
+.warmup {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.warmup-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--r-full);
+  background: var(--text-1);
+  opacity: 0.35;
+  animation: warmup-pulse 900ms ease-in-out infinite;
+}
+
+.warmup-dot:nth-child(1) {
+  animation-delay: 0ms;
+}
+.warmup-dot:nth-child(2) {
+  animation-delay: 150ms;
+}
+.warmup-dot:nth-child(3) {
+  animation-delay: 300ms;
+}
+
+@keyframes warmup-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .warmup-dot {
+    animation: none;
+    opacity: 0.6;
+    transform: none;
+  }
+}
+
+/* --- Esc cap: 24px visible cap inside a 32x32 hit area --- */
+
 .pill-cap {
   flex: none;
-  margin-left: var(--sp-4);
-  height: 22px;
-  padding: 0 6px;
-  display: inline-flex;
+  margin-left: 12px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  display: flex;
   align-items: center;
   justify-content: center;
-  font-family: var(--font-mono);
-  font-size: var(--fs-2xs);
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--text-1);
-  background: transparent;
-  border: 1px solid var(--line-strong);
-  border-radius: 0;
   cursor: pointer;
 }
 
-.pill-cap:hover {
+.pill-cap-inner {
+  height: 24px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-1);
+  border: 1px solid var(--line-strong);
+  background: var(--bg-2);
+  color: var(--text-1);
+  font-family: var(--font-sans);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  line-height: 16px;
+}
+
+:root[data-theme="light"] .pill-cap-inner {
+  background: var(--bg-1);
+}
+
+.pill-cap:hover .pill-cap-inner {
   border-color: var(--text-0);
   color: var(--text-0);
 }
 
+/* --- Right-slot note (done / error) --- */
+
 .pill-note {
   flex: none;
-  margin-left: var(--sp-4);
-  font-family: var(--font-mono);
-  font-size: var(--fs-xs);
+  margin-left: 12px;
+  font-family: var(--font-sans);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--text-1);
+  color: var(--text-2);
   white-space: nowrap;
 }
 
@@ -263,29 +352,108 @@ body {
   color: var(--text-2);
 }
 
-/* --- Row 2: done snippet --- */
+/* --- Transcript bubble (DESIGN.md §2.7) --- */
 
-.pill-row2 {
-  /* DESIGN.md §2.7: row 1 stays anchored to the body's bottom edge as the body
-     grows upward; row 2 appears in the new space at the top. DOM order keeps
-     row 1 first (so mark/label/content stay first for a11y), so visually
-     reorder row 2 above it instead of letting it fall below. */
-  order: -1;
-  flex: none;
-  height: 28px;
-  padding: 0 var(--sp-5) var(--sp-3) 40px;
-  display: flex;
-  align-items: center;
+.bubble {
+  position: absolute;
+  left: 50%;
+  bottom: 78px;
+  max-width: 400px;
+  min-width: 240px;
+  width: max-content;
+  background: var(--pill-bg);
+  border: 1px solid var(--pill-line);
+  border-radius: var(--r-4);
+  box-shadow: var(--shadow-float);
+  padding: 14px 16px 12px;
+  cursor: pointer;
+  opacity: 0;
+  transform: translateX(-50%) translateY(8px) scale(0.98);
+  animation: bubble-in var(--dur-3) var(--ease-spring) forwards;
+  animation-delay: 60ms;
 }
 
-.pill-snippet {
+@keyframes bubble-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+}
+
+.pill-root--hiding .bubble {
+  animation: bubble-out var(--dur-2) var(--ease-in) forwards;
+}
+
+@keyframes bubble-out {
+  from {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-50%) translateY(4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @keyframes bubble-in {
+    from {
+      opacity: 0;
+      transform: translateX(-50%);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(-50%);
+    }
+  }
+  @keyframes bubble-out {
+    from {
+      opacity: 1;
+      transform: translateX(-50%);
+    }
+    to {
+      opacity: 0;
+      transform: translateX(-50%);
+    }
+  }
+}
+
+.bubble-text {
+  margin: 0;
   font-family: var(--font-sans);
-  font-size: var(--fs-md);
+  font-size: var(--fs-bubble);
+  line-height: var(--lh-bubble);
   color: var(--text-0);
-  white-space: nowrap;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
-  width: 100%;
+}
+
+.bubble-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+  font-family: var(--font-sans);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-2);
+}
+
+.bubble-note--err {
+  color: var(--err);
+}
+
+.bubble-hint {
+  flex: none;
 }
 
 /* --- Sweep (transcribing/cleaning content, and indeterminate progress) --- */
@@ -293,12 +461,12 @@ body {
 .sweep {
   position: relative;
   width: 100%;
-  height: 2px;
+  height: 4px;
   background: var(--line);
+  border-radius: var(--r-full);
   overflow: hidden;
   /* Container query unit so --sweep-travel's calc() resolves against the
-     track's own width, not the animated 40px segment (WebView2 supports
-     container units). */
+     track's own width, not the animated 48px segment. */
   container-type: inline-size;
 }
 
@@ -306,8 +474,9 @@ body {
   position: absolute;
   top: 0;
   left: 0;
-  width: 40px;
-  height: 2px;
+  width: 48px;
+  height: 4px;
+  border-radius: var(--r-full);
   background: var(--accent);
   animation: sweep-move 1100ms var(--ease-lin) infinite;
 }
@@ -323,7 +492,7 @@ body {
 
 .sweep-reduced {
   display: none;
-  gap: 4px;
+  gap: 6px;
   align-items: center;
 }
 
@@ -337,13 +506,13 @@ body {
 }
 
 .sweep-reduced-block {
-  width: 8px;
-  height: 2px;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--r-full);
   background: var(--line-strong);
   opacity: 0.3;
-  /* §2.6: blocks fill in sequence (1, 2, 3, none, 1 …) every 500ms — a full
-     4-phase cycle is 2000ms, staggered every 500ms so the 4th phase (no
-     block delayed enough to be lit yet) is the empty "none" beat. */
+  /* Blocks fill in sequence (1, 2, 3, none, 1 …) every 500ms — a full 4-phase
+     cycle is 2000ms, staggered every 500ms so the 4th phase is the empty beat. */
   animation: sweep-step 2000ms steps(1) infinite;
 }
 
@@ -374,13 +543,14 @@ body {
 
 .stepper {
   display: inline-flex;
-  align-items: flex-end;
-  gap: 2px;
+  align-items: center;
+  gap: 4px;
 }
 
 .stepper-block {
-  width: 4px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--r-full);
   background: currentColor;
   opacity: 0.3;
   animation: stepper-fill 750ms steps(1) infinite;
@@ -408,8 +578,6 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  /* §5: fill sequence every 500ms under reduced motion — same 4-phase
-     (1, 2, 3, none) cycle as the reduced sweep, 2000ms total. */
   .stepper-block {
     animation-duration: 2000ms;
   }

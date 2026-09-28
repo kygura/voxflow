@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   SettingsSchema,
+  DictEntrySchema,
   ModelInfoSchema,
   HistoryEntrySchema,
   StatusSchema,
@@ -24,6 +25,9 @@ const goodSettings = {
   theme: "system",
   cleanup: "basic",
   ai: { baseUrl: "http://localhost:11434/v1", model: "llama3.2" },
+  pasteLastHotkey: "Alt+Shift+Z",
+  dictionary: [{ from: "vox flow", to: "VoxFlow" }],
+  sounds: false,
 };
 
 describe("SPEC-shaped payloads", () => {
@@ -35,6 +39,16 @@ describe("SPEC-shaped payloads", () => {
     expect(() => SettingsSchema.parse({ ...goodSettings, hotkeyMode: "nope" })).toThrow();
     const { hotkey: _hotkey, ...missingHotkey } = goodSettings;
     expect(() => SettingsSchema.parse(missingHotkey)).toThrow();
+  });
+
+  test("Settings rejects an oversized dictionary / empty from / overlong strings", () => {
+    expect(() =>
+      SettingsSchema.parse({ ...goodSettings, dictionary: Array(201).fill({ from: "a", to: "b" }) }),
+    ).toThrow();
+    expect(() => DictEntrySchema.parse({ from: "", to: "x" })).toThrow();
+    expect(() => DictEntrySchema.parse({ from: "a".repeat(101), to: "x" })).toThrow();
+    expect(() => DictEntrySchema.parse({ from: "a", to: "b".repeat(101) })).toThrow();
+    expect(DictEntrySchema.parse({ from: "vox flow", to: "" })).toBeTruthy();
   });
 
   test("ModelInfo accepts / rejects", () => {

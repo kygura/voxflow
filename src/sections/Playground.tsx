@@ -8,11 +8,11 @@ import { Copy } from "../components/icons";
 
 function counterLabel(raw: string, out: string | undefined): string {
   if (out === undefined) return "";
-  if (raw.trim() === out.trim()) return "UNCHANGED";
-  return diffLabel(raw, out, "WORDS") ?? "UNCHANGED";
+  if (raw.trim() === out.trim()) return "Unchanged";
+  return diffLabel(raw, out, "words") ?? "Unchanged";
 }
 
-/** Host shown next to the AI column eyebrow, e.g. "AI · localhost:11434". */
+/** Host shown next to the AI column heading, e.g. "AI · localhost:11434". */
 function hostFromUrl(url: string): string {
   try {
     return new URL(url).host || url;
@@ -81,8 +81,8 @@ export function Playground({
 
       <div className="playground-columns">
         <Card>
-          <div className="box-eyebrow-row">
-            <h2 className="box-eyebrow">Basic</h2>
+          <div className="box-heading-row">
+            <h2 className="box-heading">Basic</h2>
             {result && (
               <Button variant="icon" aria-label="Copy basic output" onClick={() => copy("basic", result.basic)}>
                 <Copy size={14} />
@@ -94,15 +94,15 @@ export function Playground({
           </p>
           {result && (
             <p className="playground-column-counter">
-              {copied === "basic" ? "COPIED" : counterLabel(input, result.basic)}
+              {copied === "basic" ? "Copied" : counterLabel(input, result.basic)}
             </p>
           )}
         </Card>
 
         <Card>
-          <div className="box-eyebrow-row">
-            <h2 className={`box-eyebrow${aiError ? " box-eyebrow--err" : ""}`}>
-              {aiError ? "AI · FAILED" : `AI · ${hostFromUrl(settings.ai.baseUrl)}`}
+          <div className="box-heading-row">
+            <h2 className={`box-heading${aiError ? " box-heading--err" : ""}`}>
+              {aiError ? "AI · failed" : `AI · ${hostFromUrl(settings.ai.baseUrl)}`}
             </h2>
             {result?.ai && (
               <Button variant="icon" aria-label="Copy AI output" onClick={() => copy("ai", result.ai!)}>
@@ -122,7 +122,7 @@ export function Playground({
           )}
           {result?.ai && (
             <p className="playground-column-counter">
-              {copied === "ai" ? "COPIED" : counterLabel(input, result.ai)}
+              {copied === "ai" ? "Copied" : counterLabel(input, result.ai)}
             </p>
           )}
         </Card>

@@ -17,6 +17,14 @@ export type Theme = z.infer<typeof ThemeSchema>;
 export const CleanupModeSchema = z.enum(["off", "basic", "ai"]);
 export type CleanupMode = z.infer<typeof CleanupModeSchema>;
 
+// SPEC.md v3: whole-word, case-insensitive `from` → `to`; `from` non-empty ≤100
+// chars, `to` ≤100 chars (may be empty — that means "delete the word").
+export const DictEntrySchema = z.object({
+  from: z.string().min(1).max(100),
+  to: z.string().max(100),
+});
+export type DictEntry = z.infer<typeof DictEntrySchema>;
+
 export const SettingsSchema = z.object({
   hotkey: z.string(),
   hotkeyMode: HotkeyModeSchema,
@@ -31,6 +39,9 @@ export const SettingsSchema = z.object({
   theme: ThemeSchema,
   cleanup: CleanupModeSchema,
   ai: z.object({ baseUrl: z.string(), model: z.string() }),
+  pasteLastHotkey: z.string(),
+  dictionary: z.array(DictEntrySchema).max(200),
+  sounds: z.boolean(),
 });
 export type Settings = z.infer<typeof SettingsSchema>;
 

@@ -67,10 +67,27 @@ export function General({
           <HotkeyRecorder
             value={settings.hotkey}
             onCapture={async (accel) => {
+              if (accel === settings.pasteLastHotkey) throw "Same as the paste-last hotkey.";
               const ok = await onSave({ hotkey: accel });
               if (!ok) throw "Backend could not register this combo.";
               flash();
             }}
+          />
+        </Field>
+        <Field
+          label="Paste last transcript"
+          helper="Pastes the most recent transcript again, wherever the cursor is."
+        >
+          <HotkeyRecorder
+            value={settings.pasteLastHotkey}
+            allowEmpty
+            onCapture={async (accel) => {
+              if (accel === settings.hotkey) throw "Same as the dictation hotkey.";
+              const ok = await onSave({ pasteLastHotkey: accel });
+              if (!ok) throw "Backend could not register this combo.";
+              flash();
+            }}
+            onClear={() => save({ pasteLastHotkey: "" })}
           />
         </Field>
         <Field label="Hotkey mode" helper={HOTKEY_MODE_HELPER[settings.hotkeyMode]}>
@@ -141,6 +158,16 @@ export function General({
             checked={settings.restoreClipboard}
             disabled={!settings.autoPaste}
             onChange={(v) => save({ restoreClipboard: v })}
+          />
+        </Field>
+        <Field
+          label="Sound cues"
+          helper="Short tones when recording starts and stops. Nothing on cancel or error."
+        >
+          <Toggle
+            label="Sound cues"
+            checked={settings.sounds}
+            onChange={(v) => save({ sounds: v })}
           />
         </Field>
         <Field label="Save history" helper="Keep the last 200 transcriptions on this device.">

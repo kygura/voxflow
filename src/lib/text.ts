@@ -8,11 +8,11 @@ export function wordCount(s: string): number {
 
 /**
  * Label for the word-count delta between `before` and `after`, e.g.
- * `−4 FILLERS` / `−4 WORDS`, or `EDITED` when the text changed but the word
+ * `−4 fillers` / `−4 words`, or `Edited` when the text changed but the word
  * count didn't drop. Returns null when the two are the same (nothing to report).
  */
 export function diffLabel(before: string, after: string, unit: string): string | null {
   if (before.trim() === after.trim()) return null;
   const n = wordCount(before) - wordCount(after);
-  return n >= 1 ? `−${n} ${unit}` : "EDITED";
+  return n >= 1 ? `−${n} ${unit}` : "Edited";
 }

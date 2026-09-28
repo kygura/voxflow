@@ -16,7 +16,7 @@ import { Check, Clipboard, Trash } from "../components/icons";
 
 function removedCountLabel(raw: string | undefined, text: string): string | null {
   if (!raw) return null;
-  return diffLabel(raw, text, "FILLERS");
+  return diffLabel(raw, text, "fillers");
 }
 
 export function History({
@@ -84,7 +84,8 @@ export function History({
               ref={filterInputRef}
               id="history-filter"
               value={filterInput}
-              placeholder="Filter  Ctrl+F"
+              placeholder="Filter"
+              shortcutHint="Ctrl F"
               onChange={(v) => {
                 setFilterInput(v);
                 debouncedFilter(v);
@@ -239,7 +240,7 @@ function HistoryRow({
               onToggleRaw();
             }}
           >
-            RAW
+            Raw
           </button>
         )}
         <div className="history-row-actions">
@@ -260,7 +261,7 @@ function HistoryRow({
       </div>
       {rawOpen && entry.raw && (
         <div className="raw-peek">
-          <span className="raw-peek-eyebrow">Raw</span>
+          <span className="raw-peek-heading">Raw</span>
           {entry.raw}
         </div>
       )}

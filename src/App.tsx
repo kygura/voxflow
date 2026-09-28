@@ -6,13 +6,29 @@ import { Sidebar } from "./components/ui";
 import { General } from "./sections/General";
 import { Transcription } from "./sections/Transcription";
 import { Cleanup } from "./sections/Cleanup";
+import { Dictionary } from "./sections/Dictionary";
 import { Playground } from "./sections/Playground";
 import { History } from "./sections/History";
 import { About } from "./sections/About";
 import { applyTheme } from "./lib/theme";
 
-type Section = "general" | "transcription" | "cleanup" | "playground" | "history" | "about";
-const SECTIONS: Section[] = ["general", "transcription", "cleanup", "playground", "history", "about"];
+type Section =
+  | "general"
+  | "transcription"
+  | "cleanup"
+  | "dictionary"
+  | "playground"
+  | "history"
+  | "about";
+const SECTIONS: Section[] = [
+  "general",
+  "transcription",
+  "cleanup",
+  "dictionary",
+  "playground",
+  "history",
+  "about",
+];
 
 export default function App() {
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -77,7 +93,7 @@ export default function App() {
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (!e.ctrlKey && !e.metaKey) return;
-      if (["1", "2", "3", "4", "5", "6"].includes(e.key)) {
+      if (["1", "2", "3", "4", "5", "6", "7"].includes(e.key)) {
         e.preventDefault();
         goToSection(SECTIONS[Number(e.key) - 1]);
       } else if (e.key.toLowerCase() === "f") {
@@ -175,8 +191,10 @@ export default function App() {
             onSave={saveSettings}
             hasAiKey={status.hasAiKey}
             onAiKeyChange={refreshStatus}
+            onOpenDictionary={() => goToSection("dictionary")}
           />
         )}
+        {section === "dictionary" && <Dictionary settings={settings} onSave={saveSettings} />}
         {section === "playground" && <Playground settings={settings} onError={surfaceError} />}
         {section === "history" && (
           <History

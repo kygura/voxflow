@@ -1,6 +1,6 @@
-// DESIGN.md §7 — monochrome icons. stroke = currentColor, 1.5px, square caps/joins
-// (no rounded strokes anywhere in the brutalist brief).
-// Size per DESIGN: 14px in pill / badge, 16px in icon buttons (pass `size`).
+// DESIGN.md §5 file boundaries — monochrome icons. stroke = currentColor,
+// 1.75px, round caps and joins. Size per DESIGN: 14px in pill / badge, 16px
+// in icon buttons (pass `size`).
 
 function svgProps(size: number) {
   return {
@@ -9,9 +9,9 @@ function svgProps(size: number) {
     viewBox: "0 0 24 24",
     fill: "none",
     stroke: "currentColor",
-    strokeWidth: 1.5,
-    strokeLinecap: "square" as const,
-    strokeLinejoin: "miter" as const,
+    strokeWidth: 1.75,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
     "aria-hidden": true,
   };
 }
@@ -102,6 +102,24 @@ export function File({ size = 14 }: { size?: number }) {
     <svg {...svgProps(size)}>
       <path d="M6 2h9l5 5v15H6V2z" />
       <path d="M15 2v5h5" />
+    </svg>
+  );
+}
+
+export function Book({ size = 14 }: { size?: number }) {
+  return (
+    <svg {...svgProps(size)}>
+      <path d="M4 5a2 2 0 0 1 2-2h5v17H6a2 2 0 0 0-2 2V5z" />
+      <path d="M20 5a2 2 0 0 0-2-2h-5v17h5a2 2 0 0 1 2 2V5z" />
+    </svg>
+  );
+}
+
+export function ArrowRight({ size = 14 }: { size?: number }) {
+  return (
+    <svg {...svgProps(size)}>
+      <path d="M4 12h16" />
+      <path d="M13 6l7 6-7 6" />
     </svg>
   );
 }

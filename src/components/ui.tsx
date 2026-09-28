@@ -24,13 +24,14 @@ export function Sidebar({
     { id: "general", label: "General" },
     { id: "transcription", label: "Transcription" },
     { id: "cleanup", label: "Cleanup" },
+    { id: "dictionary", label: "Dictionary" },
     { id: "playground", label: "Playground" },
     { id: "history", label: "History" },
     { id: "about", label: "About" },
   ];
 
   const statusLabel =
-    status === "idle" ? "IDLE" : status === "recording" ? "RECORDING" : status === "cleaning" ? "CLEANING" : "TRANSCRIBING";
+    status === "idle" ? "Idle" : status === "recording" ? "Recording" : status === "cleaning" ? "Cleaning" : "Transcribing";
 
   // DESIGN.md §3.1: disabled while a dictation/transcription is actually in
   // flight; allowed again once it lands on idle, done or error.
@@ -40,7 +41,7 @@ export function Sidebar({
   return (
     <nav className="sidebar" aria-label="Sections">
       <div className="sidebar-brand">
-        <span className="wordmark">VOXFLOW</span>
+        <span className="wordmark">VoxFlow</span>
       </div>
       <div className="sidebar-nav" role="list">
         {items.map((it, i) => (
@@ -79,7 +80,7 @@ export function Sidebar({
       <div className="sidebar-footer">
         <span className={`status-dot status-dot--${status}`} aria-hidden="true" />
         <span className="sidebar-footer-text">
-          <span className="sidebar-status-label mono">{statusLabel}</span>
+          <span className="sidebar-status-label">{statusLabel}</span>
           <KeyCombo combo={hotkey} size="xs" />
         </span>
       </div>
@@ -112,7 +113,7 @@ export function Card({ children }: { children: ReactNode }) {
 }
 
 export function CardTitle({ children }: { children: ReactNode }) {
-  return <h2 className="box-eyebrow">{children}</h2>;
+  return <h2 className="box-heading">{children}</h2>;
 }
 
 export function Field({
@@ -320,8 +321,10 @@ export const FilterInput = forwardRef<
     placeholder: string;
     id?: string;
     onEscape?: () => void;
+    /** Combo shown as keycaps at the right edge while the field is empty, e.g. "Ctrl F". */
+    shortcutHint?: string;
   }
->(function FilterInput({ value, onChange, placeholder, id, onEscape }, ref) {
+>(function FilterInput({ value, onChange, placeholder, id, onEscape, shortcutHint }, ref) {
   return (
     <div className="filter-input">
       <span className="filter-input-icon" aria-hidden="true">
@@ -342,7 +345,7 @@ export const FilterInput = forwardRef<
           }
         }}
       />
-      {value && (
+      {value ? (
         <button
           type="button"
           className="filter-input-clear"
@@ -351,6 +354,12 @@ export const FilterInput = forwardRef<
         >
           <X size={14} />
         </button>
+      ) : (
+        shortcutHint && (
+          <span className="filter-input-hint" aria-hidden="true">
+            <KeyCombo combo={shortcutHint} size="xs" muted />
+          </span>
+        )
       )}
     </div>
   );
@@ -435,8 +444,8 @@ export function Sweep({ width }: { width?: number }) {
   // width: 100%) and the travel distance is computed the same way, so the
   // pill's content slot and this component never disagree about the width.
   const style = width
-    ? ({ width, ["--sweep-travel" as string]: `${width - 40}px` } as React.CSSProperties)
-    : ({ ["--sweep-travel" as string]: "calc(100cqw - 40px)" } as React.CSSProperties);
+    ? ({ width, ["--sweep-travel" as string]: `${width - 48}px` } as React.CSSProperties)
+    : ({ ["--sweep-travel" as string]: "calc(100cqw - 48px)" } as React.CSSProperties);
   return (
     <div className="sweep" style={style}>
 
@@ -477,14 +486,20 @@ export function EmptyState({
   title,
   body,
   action,
+  icon,
 }: {
   title: string;
   body: string;
   action?: ReactNode;
+  icon?: ReactNode;
 }) {
   return (
     <div className="empty-state">
-      <span className="empty-state-icon" aria-hidden="true" />
+      {icon && (
+        <span className="empty-state-icon" aria-hidden="true">
+          {icon}
+        </span>
+      )}
       <p className="empty-state-title">{title}</p>
       <p className="empty-state-body">{body}</p>
       {action}
@@ -552,9 +567,9 @@ export function Banner({
         )}
       </div>
       {onDismiss && (
-        <button type="button" className="banner-dismiss" aria-label="Dismiss" onClick={onDismiss}>
-          <X size={14} />
-        </button>
+        <Button variant="ghost" className="banner-dismiss" onClick={onDismiss}>
+          Dismiss
+        </Button>
       )}
     </div>
   );
@@ -605,9 +620,7 @@ export function ApiKeyField({
   if (state === "saved") {
     return (
       <div className="api-key-field">
-        <span className="api-key-saved mono">
-          •••••••• SAVED
-        </span>
+        <span className="api-key-saved mono">•••••••• Saved</span>
         <Button
           variant="secondary"
           disabled={disabled}

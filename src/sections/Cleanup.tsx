@@ -58,11 +58,13 @@ export function Cleanup({
   onSave,
   hasAiKey,
   onAiKeyChange,
+  onOpenDictionary,
 }: {
   settings: Settings;
   onSave: (patch: Partial<Settings>) => Promise<boolean>;
   hasAiKey: boolean;
   onAiKeyChange: () => void;
+  onOpenDictionary: () => void;
 }) {
   const { saved, flash } = useSavedFlash();
   const save = async (patch: Partial<Settings>) => {
@@ -142,6 +144,12 @@ export function Cleanup({
 
       <Card>
         <CardTitle>AI provider</CardTitle>
+        <p className="box-heading-helper">
+          Dictionary replacements run before cleanup.{" "}
+          <button type="button" className="link-button" onClick={onOpenDictionary}>
+            Open dictionary
+          </button>
+        </p>
         <Field label="Preset" disabled={disabled}>
           <Select value={preset} onChange={(v) => onPreset(v as Preset)} disabled={disabled}>
             {(Object.keys(PRESET_LABELS) as Preset[]).map((p) => (
@@ -197,12 +205,12 @@ export function Cleanup({
             </Button>
             {testState.kind === "ok" && (
               <span className="test-result test-result--ok" title={testState.message}>
-                CONNECTED
+                {testState.message}
               </span>
             )}
             {testState.kind === "err" && (
               <span className="test-result test-result--err" title={testState.message}>
-                FAILED: {testState.message}
+                Failed: {testState.message}
               </span>
             )}
           </div>

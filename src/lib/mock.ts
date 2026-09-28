@@ -29,6 +29,9 @@ let settings: Settings = {
   theme: "system",
   cleanup: "basic",
   ai: { baseUrl: "http://localhost:11434/v1", model: "llama3.2" },
+  pasteLastHotkey: "Alt+Shift+Z",
+  dictionary: [{ from: "vox flow", to: "VoxFlow" }],
+  sounds: false,
 };
 
 let apiKeySaved = false;
@@ -90,26 +93,32 @@ function startLevelStream() {
   levelTimer = setInterval(() => {
     const level = Math.random() * (Math.random() > 0.15 ? 0.9 : 0.15);
     levelListeners.forEach((cb) => cb({ level }));
-  }, 33);
+  }, 25);
 }
 
-/** Speech-like envelope: bursts separated by brief pauses, ~30 Hz. */
+/** Speech-like envelope: bursts separated by brief pauses, ~40 Hz (SPEC v3). */
 function startSyntheticSpeechLevel() {
   stopLevelStream();
   let t = 0;
   levelTimer = setInterval(() => {
-    t += 33;
+    t += 25;
     const phase = (t % 900) / 900; // burst/pause cycle
     const inBurst = phase < 0.65;
     const level = inBurst ? 0.25 + Math.random() * 0.65 : Math.random() * 0.08;
     levelListeners.forEach((cb) => cb({ level }));
-  }, 33);
+  }, 25);
 }
 
 // DESIGN.md §6 demo sample: raw transcript -> cleaned transcript.
 const DEMO_RAW =
   "um so I I think we should uh ship the the new build on Friday, no wait, Monday";
 const DEMO_TEXT = "So I think we should ship the new build on Friday, no wait, Monday.";
+// ?state=done&long=1 — a 6-line sample to verify the bubble's 4-line clamp.
+const DEMO_LONG_TEXT =
+  "So I think we should ship the new build on Friday, no wait, actually Monday " +
+  "makes more sense given the QA backlog. Let me check with the team first and " +
+  "get back to you about the exact timeline once I know how testing is going, " +
+  "because I don't want to commit to a date we can't actually hit this time.";
 
 let demoTimer: ReturnType<typeof setTimeout> | null = null;
 function runDemoSequence() {
@@ -328,14 +337,18 @@ export function forceDictationState(
   state: DictationStateEvent["state"],
   message?: string,
   mode?: DictationStateEvent["mode"],
+  opts?: { warmup?: boolean; long?: boolean; flash?: boolean },
 ) {
-  if (state !== "recording") stopLevelStream();
+  stopLevelStream();
   if (state === "done") {
-    emitState({ state, message, mode, text: DEMO_TEXT, raw: DEMO_RAW });
+    const text = opts?.long ? DEMO_LONG_TEXT : DEMO_TEXT;
+    const raw = opts?.flash ? undefined : DEMO_RAW;
+    emitState({ state, message, mode, text, raw });
   } else {
     emitState({ state, message, mode });
   }
-  if (state === "recording") startSyntheticSpeechLevel();
+  // ?warmup=1: stay in the warm-up dots — never emit a level event.
+  if (state === "recording" && !opts?.warmup) startSyntheticSpeechLevel();
 }
 
 /** Used only by pill.tsx?demo=1 to run the full recording→idle loop. */
