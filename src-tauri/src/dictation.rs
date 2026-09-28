@@ -13,7 +13,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Shortcut};
-use voxflow_core::audio::{self, is_probably_silent, Recorder, MAX_DURATION, MIN_SAMPLES};
+use voxflow_core::audio::{self, is_probably_silent, Recorder, SilenceDetector, MAX_DURATION, MIN_SAMPLES};
 use voxflow_core::history::HistoryEntry;
 use voxflow_core::output::{deliver, Delivered};
 use voxflow_core::cleanup::{self, Cleaned};
@@ -39,6 +39,9 @@ pub enum Action {
     HandsFree,
     Ignore,
 }
+
+/// No audio within this long of starting → the mic is dead or blocked (SPEC v3).
+pub const WARMUP: Duration = Duration::from_millis(1500);
 
 /// Hybrid mode: a hold at least this long is push-to-talk, shorter is a tap (hands-free).
 pub const HOLD: Duration = Duration::from_millis(350);
@@ -71,6 +74,14 @@ pub enum Input {
     /// Tray item: start, stop or cancel depending on phase.
     Tray,
     AutoStop(u64),
+    /// First level block of this recording arrived.
+    Heard(u64),
+    /// Warm-up deadline: no audio by now → "Microphone not responding".
+    Warmup(u64),
+    /// [`audio::SILENCE_STOP`] of silence; stops hands-free recordings.
+    Silence(u64),
+    /// Paste-last hotkey: re-deliver the most recent transcript.
+    PasteLast,
     /// Transcript ready, AI cleanup running (basic is instant and skips this state).
     Cleaning(u64),
     /// `paste`: false for "Transcribe file" (clipboard only).
@@ -175,8 +186,10 @@ struct Worker {
     demo: bool,
     /// Demo cycles still to run after the current one.
     demo_left: u32,
-    /// Demo clip playing; dropping it stops the sound.
+    /// Demo clip or sound cue playing; dropping it stops the sound.
     playback: Option<Sender<()>>,
+    /// Current recording has delivered audio (warm-up check).
+    heard: bool,
 }
 
 pub fn spawn(app: AppHandle, tx: Sender<Input>, rx: Receiver<Input>) {
@@ -192,6 +205,7 @@ pub fn spawn(app: AppHandle, tx: Sender<Input>, rx: Receiver<Input>) {
         demo: false,
         demo_left: 0,
         playback: None,
+        heard: false,
     };
     thread::Builder::new()
         .name("voxflow-dictation".into())
@@ -218,7 +232,12 @@ impl Worker {
             match input {
                 Input::Esc | Input::Cancel | Input::Stop => return self.abort_demo(),
                 // A new preview restarts the demo.
-                Input::Key { pressed: true, .. } | Input::Start | Input::Tray | Input::File(_) | Input::Demo(_) => {
+                Input::Key { pressed: true, .. }
+                | Input::Start
+                | Input::Tray
+                | Input::File(_)
+                | Input::Demo(_)
+                | Input::PasteLast => {
                     self.abort_demo()
                 }
                 _ => {}
@@ -248,6 +267,14 @@ impl Worker {
                 _ => self.start(true, Instant::now()),
             },
             Input::AutoStop(gen) if gen == self.gen && self.phase == Phase::Recording => self.stop(),
+            Input::Heard(gen) if gen == self.gen => self.heard = true,
+            Input::Warmup(gen) if gen == self.gen && self.phase == Phase::Recording && !self.heard => {
+                self.fail("Microphone not responding".into())
+            }
+            Input::Silence(gen) if gen == self.gen && self.phase == Phase::Recording && self.hands_free => {
+                self.stop()
+            }
+            Input::PasteLast if !active => self.paste_last(),
             Input::Cleaning(gen) if gen == self.gen && self.phase == Phase::Transcribing => {
                 self.emit(Phase::Cleaning, None)
             }
@@ -292,25 +319,34 @@ impl Worker {
 
     fn start(&mut self, hands_free: bool, at: Instant) {
         let s = self.settings();
-        let app = self.app.clone();
+        self.gen += 1;
+        self.heard = false;
+        let (app, tx, gen) = (self.app.clone(), self.tx.clone(), self.gen);
+        let (mut heard, mut silence) = (false, SilenceDetector::default());
         let rec = Recorder::start(s.input_device.as_deref(), move |level| {
             let _ = app.emit_to("pill", "dictation://level", LevelEvent { level });
+            if !heard {
+                heard = true;
+                let _ = tx.send(Input::Heard(gen));
+            }
+            if silence.push(level) {
+                let _ = tx.send(Input::Silence(gen));
+            }
         });
-        self.gen += 1;
         show_pill(&self.app);
         match rec {
             Ok(r) => self.recorder = Some(r),
             Err(e) => return self.fail(format!("Microphone: {e:#}")),
         }
+        if s.sounds {
+            self.playback = Some(audio::play(audio::tone(880.0, 1320.0, 90)));
+        }
         self.pressed_at = at;
         self.hands_free = hands_free;
         self.set_esc(true);
         self.emit(Phase::Recording, None);
-        let (tx, gen) = (self.tx.clone(), self.gen);
-        thread::spawn(move || {
-            thread::sleep(MAX_DURATION);
-            let _ = tx.send(Input::AutoStop(gen));
-        });
+        self.after(WARMUP.as_millis() as u64, Input::Warmup(gen));
+        self.after(MAX_DURATION.as_millis() as u64, Input::AutoStop(gen));
     }
 
     fn stop(&mut self) {
@@ -319,6 +355,9 @@ impl Worker {
             Ok(s) => s,
             Err(e) => return self.fail(format!("{e:#}")),
         };
+        if self.settings().sounds {
+            self.playback = Some(audio::play(audio::tone(1320.0, 880.0, 120)));
+        }
         if samples.len() < MIN_SAMPLES || is_probably_silent(&samples) {
             return self.go_idle();
         }
@@ -361,14 +400,7 @@ impl Worker {
     fn output(&mut self, o: Outcome, s: &Settings, paste: bool) {
         let Outcome { raw, cleaned: Cleaned { text, note }, duration_ms } = o;
         self.set_esc(false);
-        // The stop may have been a key press: pasting while the hotkey's modifiers are still
-        // down would send e.g. Ctrl+Shift+V. Wait for the release (bounded).
-        // ponytail: held longer than 1.5 s → we paste anyway and may send a modified Ctrl+V;
-        // poll real modifier state (OS API) if that shows up in practice.
-        let t = Instant::now();
-        while self.state().hotkey_down.load(Ordering::Relaxed) && t.elapsed() < Duration::from_millis(1500) {
-            thread::sleep(Duration::from_millis(20));
-        }
+        self.wait_hotkey_release();
         let delivered = match deliver(&text, paste && s.auto_paste, s.restore_clipboard) {
             Ok(d) => d,
             Err(e) => return self.fail(format!("{e:#}")),
@@ -393,6 +425,33 @@ impl Worker {
         }
         let (msg, ms) = done_message(delivered, note.is_some());
         self.emit_full(Phase::Done, Some(&msg), Some(&text), Some(&raw));
+        self.after(ms, Input::Expire(self.gen));
+    }
+
+    /// The stop (or paste-last) may have been a key press: pasting while the hotkey's
+    /// modifiers are still down would send e.g. Ctrl+Shift+V. Wait for the release (bounded).
+    /// ponytail: held longer than 1.5 s → we paste anyway and may send a modified Ctrl+V;
+    /// poll real modifier state (OS API) if that shows up in practice.
+    fn wait_hotkey_release(&self) {
+        let t = Instant::now();
+        while self.state().hotkey_down.load(Ordering::Relaxed) && t.elapsed() < Duration::from_millis(1500) {
+            thread::sleep(Duration::from_millis(20));
+        }
+    }
+
+    /// Paste-last hotkey: same output path as a dictation (no history, no raw), done flash.
+    fn paste_last(&mut self) {
+        let Some(text) = crate::last_transcript(&self.app) else { return };
+        let s = self.settings();
+        self.gen += 1; // a pending Expire/HideWindow from the previous done state is stale
+        show_pill(&self.app);
+        self.wait_hotkey_release();
+        let delivered = match deliver(&text, s.auto_paste, s.restore_clipboard) {
+            Ok(d) => d,
+            Err(e) => return self.fail(format!("{e:#}")),
+        };
+        let (msg, ms) = done_message(delivered, false);
+        self.emit_full(Phase::Done, Some(&msg), Some(&text), None);
         self.after(ms, Input::Expire(self.gen));
     }
 

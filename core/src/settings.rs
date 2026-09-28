@@ -72,6 +72,18 @@ impl Default for AiConfig {
     }
 }
 
+/// Personal dictionary entry: whole-word, case-insensitive `from` → `to` (SPEC v3).
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct DictEntry {
+    pub from: String,
+    pub to: String,
+}
+
+pub const MAX_DICTIONARY: usize = 200;
+/// Max chars of a dictionary `from` or `to`.
+pub const MAX_DICT_LEN: usize = 100;
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
@@ -88,6 +100,10 @@ pub struct Settings {
     pub theme: Theme,
     pub cleanup: Cleanup,
     pub ai: AiConfig,
+    /// "" disables.
+    pub paste_last_hotkey: String,
+    pub dictionary: Vec<DictEntry>,
+    pub sounds: bool,
 }
 
 impl Default for Settings {
@@ -106,6 +122,9 @@ impl Default for Settings {
             theme: Theme::System,
             cleanup: Cleanup::Basic,
             ai: AiConfig::default(),
+            paste_last_hotkey: "Alt+Shift+Z".into(),
+            dictionary: Vec::new(),
+            sounds: false,
         }
     }
 }
@@ -165,6 +184,21 @@ impl Settings {
             "unknown local model: {}",
             self.local_model
         );
+        ensure!(
+            !self.paste_last_hotkey.trim().eq_ignore_ascii_case(self.hotkey.trim()),
+            "paste-last hotkey must differ from the dictation hotkey"
+        );
+        ensure!(
+            self.dictionary.len() <= MAX_DICTIONARY,
+            "dictionary has more than {MAX_DICTIONARY} entries"
+        );
+        for e in &self.dictionary {
+            ensure!(!e.from.trim().is_empty(), "dictionary entry has an empty word");
+            ensure!(
+                e.from.chars().count() <= MAX_DICT_LEN && e.to.chars().count() <= MAX_DICT_LEN,
+                "dictionary entries must be at most {MAX_DICT_LEN} characters"
+            );
+        }
         Ok(())
     }
 }
@@ -190,6 +224,9 @@ mod tests {
         assert_eq!(json["cleanup"], "basic");
         assert_eq!(json["ai"]["baseUrl"], "http://localhost:11434/v1");
         assert_eq!(json["ai"]["model"], "llama3.2");
+        assert_eq!(json["pasteLastHotkey"], "Alt+Shift+Z");
+        assert_eq!(json["dictionary"], serde_json::json!([]));
+        assert_eq!(json["sounds"], false);
     }
 
     #[test]
@@ -207,6 +244,9 @@ mod tests {
                 base_url: "https://api.groq.com/openai/v1".into(),
                 model: "llama-3.1-8b-instant".into(),
             },
+            paste_last_hotkey: String::new(),
+            dictionary: vec![DictEntry { from: "voks flow".into(), to: "VoxFlow".into() }],
+            sounds: true,
             ..Default::default()
         };
         s.save(&path).unwrap();
@@ -215,6 +255,8 @@ mod tests {
         let raw = std::fs::read_to_string(&path).unwrap();
         assert!(raw.contains("\"push_to_talk\""));
         assert!(raw.contains("\"cleanup\": \"ai\""));
+        assert!(raw.contains("\"pasteLastHotkey\": \"\""));
+        assert!(raw.contains("\"from\": \"voks flow\""));
     }
 
     #[test]
@@ -246,6 +288,8 @@ mod tests {
         assert_eq!(s.hotkey, Settings::default().hotkey);
         assert_eq!(s.cleanup, Cleanup::Basic); // pre-v2 file
         assert_eq!(s.ai, AiConfig::default());
+        assert_eq!(s.paste_last_hotkey, "Alt+Shift+Z"); // pre-v3 file
+        assert!(s.dictionary.is_empty() && !s.sounds);
     }
 
     #[test]
@@ -270,11 +314,22 @@ mod tests {
         assert!(bad(|s| s.ai.base_url = "ftp://example.com".into()));
         assert!(bad(|s| s.ai.base_url = "https://k:sk@example.com/v1".into()));
         assert!(bad(|s| s.ai.model = "".into()));
+        assert!(bad(|s| s.paste_last_hotkey = "commandorcontrol+shift+space ".into()));
+        fn entry(from: &str, to: &str) -> DictEntry {
+            DictEntry { from: from.into(), to: to.into() }
+        }
+        assert!(bad(|s| s.dictionary = vec![entry(" ", "x")]));
+        assert!(bad(|s| s.dictionary = vec![entry(&"a".repeat(101), "x")]));
+        assert!(bad(|s| s.dictionary = vec![entry("a", &"é".repeat(101))]));
+        assert!(bad(|s| s.dictionary = vec![DictEntry { from: "a".into(), to: "b".into() }; 201]));
         let mut ok = Settings::default();
         ok.remote.base_url = "http://localhost:8000/v1".into();
         ok.language = "de".into();
         assert!(ok.validate().is_ok());
         ok.remote.base_url = "http://192.168.1.20:8000/v1".into(); // LAN speaches server
+        assert!(ok.validate().is_ok());
+        ok.paste_last_hotkey = String::new(); // disabled
+        ok.dictionary = vec![DictEntry { from: "é".repeat(100), to: String::new() }; 200];
         assert!(ok.validate().is_ok());
     }
 }

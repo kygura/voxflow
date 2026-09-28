@@ -53,6 +53,38 @@ pub fn envelope(samples: &[f32]) -> Vec<f32> {
     samples.chunks(16 * LEVEL_BLOCK_MS as usize).map(level).collect()
 }
 
+/// Hands-free auto-stop (SPEC v3): this long of continuous level below [`SILENCE_LEVEL`].
+pub const SILENCE_STOP: Duration = Duration::from_secs(30);
+pub const SILENCE_LEVEL: f32 = 0.08;
+
+/// Feed it every [`level`] block; `push` returns true once, on the block that completes
+/// [`SILENCE_STOP`] of continuous quiet. Any louder block restarts the count.
+#[derive(Default)]
+pub struct SilenceDetector {
+    quiet: u64,
+}
+
+impl SilenceDetector {
+    pub fn push(&mut self, level: f32) -> bool {
+        self.quiet = if level < SILENCE_LEVEL { self.quiet + 1 } else { 0 };
+        self.quiet == SILENCE_STOP.as_millis() as u64 / LEVEL_BLOCK_MS
+    }
+}
+
+/// Short 16 kHz sound cue: a sine gliding `from_hz` → `to_hz` under a half-sine envelope
+/// (no clicks), peak 0.2.
+pub fn tone(from_hz: f32, to_hz: f32, ms: u32) -> Vec<f32> {
+    let n = 16 * ms as usize;
+    let mut phase = 0.0f32;
+    (0..n)
+        .map(|i| {
+            let t = i as f32 / n as f32;
+            phase += std::f32::consts::TAU * (from_hz + (to_hz - from_hz) * t) / 16_000.0;
+            0.2 * (std::f32::consts::PI * t).sin() * phase.sin()
+        })
+        .collect()
+}
+
 /// Play 16 kHz mono audio on the default output device, on its own thread (a cpal `Stream`
 /// is `!Send`). Dropping the returned sender stops it. No output device: skipped silently.
 pub fn play(samples: Vec<f32>) -> mpsc::Sender<()> {
@@ -117,7 +149,7 @@ impl Recorder {
     /// `on_level` gets 0..1 at ~30 Hz from the audio thread.
     pub fn start(
         device: Option<&str>,
-        on_level: impl Fn(f32) + Send + 'static,
+        on_level: impl FnMut(f32) + Send + 'static,
     ) -> Result<Recorder> {
         let device = device.map(str::to_owned);
         let (stop_tx, stop_rx) = mpsc::channel::<()>();
@@ -165,7 +197,7 @@ impl Recorder {
 
 type Opened = (cpal::Stream, Arc<Mutex<Vec<f32>>>, u16, u32);
 
-fn open_stream(name: Option<&str>, on_level: Box<dyn Fn(f32) + Send>) -> Result<Opened> {
+fn open_stream(name: Option<&str>, on_level: Box<dyn FnMut(f32) + Send>) -> Result<Opened> {
     let host = cpal::default_host();
     let named = name.and_then(|n| {
         host.input_devices()
@@ -214,7 +246,7 @@ fn open_stream(name: Option<&str>, on_level: Box<dyn Fn(f32) + Send>) -> Result<
 struct Sink {
     buf: Arc<Mutex<Vec<f32>>>,
     cap: usize,
-    on_level: Box<dyn Fn(f32) + Send>,
+    on_level: Box<dyn FnMut(f32) + Send>,
     /// Current level block (interleaved samples); emitted and cleared every `block_len`.
     block: Vec<f32>,
     block_len: usize,
@@ -290,6 +322,29 @@ mod tests {
         // Pauses *inside* the speech, not just leading/trailing silence.
         let gaps = env[first..last].iter().filter(|l| **l < 0.2).count();
         assert!(peaks > env.len() / 3 && gaps >= 2, "peaks {peaks} gaps {gaps} of {}", env.len());
+    }
+
+    #[test]
+    fn silence_detector_fires_once_after_continuous_quiet() {
+        let blocks = (SILENCE_STOP.as_millis() as u64 / LEVEL_BLOCK_MS) as usize; // 1200
+        let mut d = SilenceDetector::default();
+        assert!((0..blocks - 1).all(|_| !d.push(0.05)));
+        assert!(!d.push(0.3)); // speech resets the count
+        assert!((0..blocks - 1).all(|_| !d.push(SILENCE_LEVEL - 0.001)));
+        assert!(!d.push(SILENCE_LEVEL)); // at the threshold is not silence
+        assert!((0..blocks - 1).all(|_| !d.push(0.0)));
+        assert!(d.push(0.0));
+        assert!((0..blocks * 2).all(|_| !d.push(0.0))); // only once
+    }
+
+    #[test]
+    fn tones_are_short_soft_and_click_free() {
+        let t = tone(880.0, 1320.0, 90);
+        assert_eq!(t.len(), 16 * 90);
+        let peak = t.iter().fold(0.0f32, |m, x| m.max(x.abs()));
+        assert!(peak > 0.15 && peak <= 0.2, "{peak}");
+        assert!(t[0].abs() < 0.01 && t[t.len() - 1].abs() < 0.01);
+        assert_eq!(tone(1320.0, 880.0, 120).len(), 16 * 120);
     }
 
     #[test]

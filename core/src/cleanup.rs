@@ -1,7 +1,7 @@
 //! Post-transcription cleanup (SPEC v2): deterministic `basic` rules and an
 //! OpenAI-compatible `ai` pass that falls back to `basic` on any failure.
 
-use crate::settings::{AiConfig, Cleanup, Settings};
+use crate::settings::{AiConfig, Cleanup, DictEntry, Settings};
 use crate::transcribe::remote::{http_error, key_transport_ok, read_body};
 use anyhow::{bail, ensure, Context, Result};
 use std::time::Duration;
@@ -458,9 +458,74 @@ pub struct Cleaned {
     pub note: Option<String>,
 }
 
-/// Apply the configured cleanup. `ai` falls back to `basic` on any error; the
+/// Personal dictionary (SPEC v3): whole-word, case-insensitive `from` → `to` (inserted as
+/// written), left to right without re-scanning replacements; the longest `from` wins at a
+/// position. Word chars are Unicode alphanumerics; whitespace in `from` matches any run.
+/// ponytail: apostrophes are boundaries, so "jason" matches in "jason's" (and "don" in "don't").
+pub fn apply_dictionary(text: &str, dict: &[DictEntry]) -> String {
+    let mut entries: Vec<(Vec<char>, &str)> = dict
+        .iter()
+        .map(|e| (e.from.trim().chars().collect::<Vec<_>>(), e.to.as_str()))
+        .filter(|(f, _)| !f.is_empty())
+        .collect();
+    if entries.is_empty() {
+        return text.to_owned();
+    }
+    entries.sort_by_key(|(f, _)| std::cmp::Reverse(f.len())); // stable: ties keep user order
+    let chars: Vec<char> = text.chars().collect();
+    let word = |i: usize| chars.get(i).is_some_and(|c| c.is_alphanumeric());
+    let mut out = String::with_capacity(text.len());
+    let mut i = 0;
+    while i < chars.len() {
+        let hit = (i == 0 || !word(i - 1))
+            .then(|| {
+                entries
+                    .iter()
+                    .find_map(|(f, to)| match_at(&chars, i, f).filter(|&e| !word(e)).map(|e| (e, *to)))
+            })
+            .flatten();
+        match hit {
+            Some((end, to)) => {
+                out.push_str(to);
+                i = end;
+            }
+            None => {
+                out.push(chars[i]);
+                i += 1;
+            }
+        }
+    }
+    out
+}
+
+/// End index if `from` matches `text` at `i` (case-insensitive, whitespace runs equal).
+fn match_at(text: &[char], mut i: usize, from: &[char]) -> Option<usize> {
+    let mut j = 0;
+    while j < from.len() {
+        if from[j].is_whitespace() {
+            if !text.get(i)?.is_whitespace() {
+                return None;
+            }
+            while text.get(i).is_some_and(|c| c.is_whitespace()) {
+                i += 1;
+            }
+            while from.get(j).is_some_and(|c| c.is_whitespace()) {
+                j += 1;
+            }
+        } else if text.get(i)?.to_lowercase().eq(from[j].to_lowercase()) {
+            i += 1;
+            j += 1;
+        } else {
+            return None;
+        }
+    }
+    Some(i)
+}
+
+/// Apply the personal dictionary, then the configured cleanup. `ai` falls back to `basic` on any error; the
 /// transcript is never lost.
 pub fn run(text: &str, settings: &Settings, ai_key: Option<&str>) -> Cleaned {
+    let text = apply_dictionary(text, &settings.dictionary);
     let text = text.trim();
     let plain = |text: String| Cleaned { text, note: None };
     match settings.cleanup {
@@ -770,5 +835,44 @@ mod tests {
         );
         s.cleanup = Cleanup::Ai;
         assert_eq!(run("   ", &s, None).text, ""); // nothing to send
+    }
+
+    #[test]
+    fn dictionary_table() {
+        let d = |pairs: &[(&str, &str)]| -> Vec<DictEntry> {
+            pairs.iter().map(|(f, t)| DictEntry { from: (*f).into(), to: (*t).into() }).collect()
+        };
+        type Case = (&'static [(&'static str, &'static str)], &'static str, &'static str);
+        #[rustfmt::skip]
+        let cases: &[Case] = &[
+            // (dictionary, input, expected)
+            (&[], "untouched text", "untouched text"),
+            (&[("voxflow", "VoxFlow")], "I use voxflow daily", "I use VoxFlow daily"),
+            (&[("voxflow", "VoxFlow")], "VOXFLOW, Voxflow. voxflows", "VoxFlow, VoxFlow. voxflows"),
+            (&[("cat", "dog")], "concat cats cat", "concat cats dog"),
+            (&[("cat", "dog")], "(cat) ¿cat? cat!", "(dog) ¿dog? dog!"),
+            (&[("cat", "dog")], "cat's", "dog's"),
+            // Multi-word, any whitespace run between words.
+            (&[("voks  flow", "VoxFlow")], "try voks \t flow now", "try VoxFlow now"),
+            (&[("new york", "NYC")], "new yorker in new york.", "new yorker in NYC."),
+            // Spanish accents: case-insensitive on accented letters, accents are word chars.
+            (&[("josé pérez", "José Pérez")], "hablé con JOSÉ PÉREZ ayer", "hablé con José Pérez ayer"),
+            (&[("ano", "año")], "el ano, un añoso anillo", "el año, un añoso anillo"),
+            (&[("jose", "José")], "josé jose", "josé José"),
+            (&[("ñandú", "Ñandú")], "¡ÑANDÚ!", "¡Ñandú!"),
+            // Overlapping entries: longest `from` first, regardless of order.
+            (&[("new", "NEW"), ("new york", "NYC")], "new york and new", "NYC and NEW"),
+            (&[("york city", "YC"), ("new york", "NY")], "new york city", "NY city"),
+            // Replacements are not re-scanned.
+            (&[("a", "b"), ("b", "c")], "a b", "b c"),
+            (&[("  ", "x"), ("hi", "")], "hi there", " there"),
+        ];
+        for (dict, input, want) in cases {
+            assert_eq!(apply_dictionary(input, &d(dict)), *want, "{dict:?} {input:?}");
+        }
+        let mut s = Settings { cleanup: Cleanup::Off, dictionary: d(&[("voks", "Vox")]), ..Default::default() };
+        assert_eq!(run(" voks ", &s, None).text, "Vox");
+        (s.cleanup, s.language) = (Cleanup::Basic, "en".into());
+        assert_eq!(run("um voks flow", &s, None).text, "Vox flow");
     }
 }

@@ -4,13 +4,13 @@ mod dictation;
 use dictation::{Input, Phase};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::Instant;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent, Wry};
-use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, ShortcutState};
+use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Shortcut, ShortcutState};
 use voxflow_core::history::History;
 use voxflow_core::settings::{Backend, Settings};
 use voxflow_core::transcribe::LocalEngine;
@@ -37,6 +37,10 @@ pub struct AppState {
     pub last_text: Mutex<Option<String>>,
     /// Main hotkey physically down (set straight from the shortcut handler).
     pub hotkey_down: AtomicBool,
+    /// `Shortcut::id()` of the registered paste-last hotkey, 0 = none. An atomic, not the
+    /// settings lock: the shortcut handler runs under the plugin lock, which `save_settings`
+    /// takes while holding the settings lock.
+    pub paste_last_id: AtomicU32,
     pub tx: mpsc::Sender<Input>,
 }
 
@@ -85,11 +89,20 @@ fn send(app: &AppHandle, input: Input) {
     }
 }
 
-fn copy_last(app: &AppHandle) {
+/// This session's last transcript, else the newest history entry.
+pub fn last_transcript(app: &AppHandle) -> Option<String> {
     let st = app.state::<AppState>();
     let last = st.last_text.lock().unwrap().clone();
-    let text = last.or_else(|| st.history.lock().unwrap().entries().first().map(|e| e.text.clone()));
-    if let Some(text) = text {
+    last.or_else(|| st.history.lock().unwrap().entries().first().map(|e| e.text.clone()))
+}
+
+/// Id of a paste-last hotkey string; "" or unparseable → 0 (none).
+pub fn shortcut_id(hotkey: &str) -> u32 {
+    hotkey.parse::<Shortcut>().map_or(0, |s| s.id())
+}
+
+fn copy_last(app: &AppHandle) {
+    if let Some(text) = last_transcript(app) {
         if let Err(e) = voxflow_core::output::deliver(&text, false, false) {
             eprintln!("voxflow: copy failed: {e:#}");
         }
@@ -110,6 +123,17 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         eprintln!("voxflow: {msg}");
         status.last_error = Some(msg);
     }
+    let mut paste_last_id = 0;
+    if !settings.paste_last_hotkey.is_empty() {
+        match handle.global_shortcut().register(settings.paste_last_hotkey.as_str()) {
+            Ok(()) => paste_last_id = shortcut_id(&settings.paste_last_hotkey),
+            Err(e) => {
+                let msg = format!("Could not register paste-last hotkey {}: {e}", settings.paste_last_hotkey);
+                eprintln!("voxflow: {msg}");
+                status.last_error.get_or_insert(msg);
+            }
+        }
+    }
 
     let demo = std::env::args().any(|a| a == "--demo");
     let first_run = !demo
@@ -128,6 +152,7 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         status: Mutex::new(status),
         last_text: Mutex::default(),
         hotkey_down: AtomicBool::new(false),
+        paste_last_id: AtomicU32::new(paste_last_id),
         tx: tx.clone(),
     });
     if demo {
@@ -209,6 +234,13 @@ pub fn run() {
                             return;
                         }
                         Input::Esc
+                    } else if shortcut.id() == st.paste_last_id.load(Ordering::Relaxed) {
+                        // hotkey_down: the worker waits for this release before pasting too.
+                        st.hotkey_down.store(pressed, Ordering::Relaxed);
+                        if !pressed {
+                            return;
+                        }
+                        Input::PasteLast
                     } else {
                         st.hotkey_down.store(pressed, Ordering::Relaxed);
                         Input::Key { pressed, at: Instant::now() }

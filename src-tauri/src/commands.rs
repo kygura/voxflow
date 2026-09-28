@@ -5,8 +5,8 @@ use crate::{ai_key, api_key, keyring_entry, AppState, KEY_AI, KEY_REMOTE};
 use serde::Serialize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use tauri::{AppHandle, Emitter, Manager, State};
-use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
+use tauri::{AppHandle, Emitter, Manager, State, Wry};
+use tauri_plugin_global_shortcut::{Code, GlobalShortcut, GlobalShortcutExt, Shortcut};
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
 use voxflow_core::history::HistoryEntry;
@@ -61,32 +61,55 @@ pub fn get_settings(state: State<AppState>) -> Settings {
     state.settings.lock().unwrap().clone()
 }
 
-/// Validate, re-register the hotkey if it changed (reverting on failure), then persist.
+/// A hotkey string the global-shortcut plugin accepts; Esc is reserved for cancel.
+fn parse_hotkey(hotkey: &str) -> Res<Shortcut> {
+    let s: Shortcut = hotkey.parse().map_err(|e| format!("Invalid hotkey {hotkey}: {e}"))?;
+    if s.key == Code::Escape {
+        return Err("Esc is reserved for cancelling dictation".into());
+    }
+    Ok(s)
+}
+
+/// Unregister `old` hotkeys, register `new` ones ("" = none). On failure the old set is back.
+fn swap_hotkeys<'a>(gs: &GlobalShortcut<Wry>, old: [&'a str; 2], new: [&'a str; 2]) -> Res {
+    let set = |keys: [&'a str; 2]| keys.into_iter().filter(|k| !k.is_empty());
+    set(old).for_each(|k| drop(gs.unregister(k)));
+    let mut done = Vec::new();
+    for k in set(new) {
+        if let Err(e) = gs.register(k) {
+            done.into_iter().for_each(|d: &str| drop(gs.unregister(d)));
+            set(old).for_each(|k| drop(gs.register(k)));
+            return Err(format!("Could not register hotkey {k}: {e}"));
+        }
+        done.push(k);
+    }
+    Ok(())
+}
+
+/// Validate, re-register the hotkeys if they changed (reverting on failure), then persist.
 #[tauri::command]
 pub fn save_settings(app: AppHandle, state: State<AppState>, settings: Settings) -> Res {
     settings.validate().map_err(err)?;
+    let hotkey = parse_hotkey(&settings.hotkey)?;
+    if !settings.paste_last_hotkey.is_empty() && parse_hotkey(&settings.paste_last_hotkey)? == hotkey {
+        return Err("Paste-last hotkey must differ from the dictation hotkey".into());
+    }
     let mut current = state.settings.lock().unwrap();
-    let old = current.hotkey.clone();
-    let changed = old != settings.hotkey;
+    let old = [current.hotkey.clone(), current.paste_last_hotkey.clone()];
+    let old = [old[0].as_str(), old[1].as_str()];
+    let new = [settings.hotkey.as_str(), settings.paste_last_hotkey.as_str()];
+    let changed = old != new;
     let gs = app.global_shortcut();
     if changed {
-        let new: Shortcut = settings.hotkey.parse().map_err(|e| format!("Invalid hotkey {}: {e}", settings.hotkey))?;
-        if new.key == tauri_plugin_global_shortcut::Code::Escape {
-            return Err("Esc is reserved for cancelling dictation".into());
-        }
-        let _ = gs.unregister(old.as_str());
-        if let Err(e) = gs.register(new) {
-            let _ = gs.register(old.as_str());
-            return Err(format!("Could not register hotkey {}: {e}", settings.hotkey));
-        }
+        swap_hotkeys(gs, old, new)?;
     }
     if let Err(e) = settings.save(&state.settings_path) {
         if changed {
-            let _ = gs.unregister(settings.hotkey.as_str());
-            let _ = gs.register(old.as_str());
+            let _ = swap_hotkeys(gs, new, old);
         }
         return Err(err(e));
     }
+    state.paste_last_id.store(crate::shortcut_id(&settings.paste_last_hotkey), Ordering::Relaxed);
     *current = settings;
     drop(current);
     let _ = app.emit("settings://changed", ());
