@@ -12,6 +12,7 @@ VoxFlow is a desktop voice-dictation app. Press your hotkey anywhere to record s
 - **Live waveform** pill overlay (dark capsule, acid-lime accent) showing recording state (listening/transcribing/cleaning/done/error), with a transcript bubble above it on done (click to copy)
 - **Paste-last hotkey** (default Alt+Shift+Z): re-delivers the most recent transcript wherever the cursor is
 - **Personal dictionary**: whole-word, case-insensitive replacements applied to the raw transcript before cleanup (up to 200 entries)
+- **Custom cleanup instructions** (AI mode only): free-form guidance (up to 2000 characters) appended to the AI cleanup prompt, e.g. "keep technical terms as spoken", "use British spelling"
 - **Sound cues** (optional): short tones when recording starts and stops
 - **Warm-up detection**: if no audio arrives within 1.5s of starting to record, the pill shows "Microphone not responding"
 - **Hands-free auto-stop**: 30s of continuous silence stops and transcribes automatically

@@ -83,6 +83,8 @@ pub struct DictEntry {
 pub const MAX_DICTIONARY: usize = 200;
 /// Max chars of a dictionary `from` or `to`.
 pub const MAX_DICT_LEN: usize = 100;
+/// Max chars of the custom AI cleanup instructions.
+pub const MAX_CLEANUP_INSTRUCTIONS: usize = 2000;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", default)]
@@ -100,6 +102,8 @@ pub struct Settings {
     pub theme: Theme,
     pub cleanup: Cleanup,
     pub ai: AiConfig,
+    /// Free-form style preferences for AI cleanup; "" = none.
+    pub cleanup_instructions: String,
     /// "" disables.
     pub paste_last_hotkey: String,
     pub dictionary: Vec<DictEntry>,
@@ -122,6 +126,7 @@ impl Default for Settings {
             theme: Theme::System,
             cleanup: Cleanup::Basic,
             ai: AiConfig::default(),
+            cleanup_instructions: String::new(),
             paste_last_hotkey: "Alt+Shift+Z".into(),
             dictionary: Vec::new(),
             sounds: false,
@@ -192,6 +197,10 @@ impl Settings {
             self.dictionary.len() <= MAX_DICTIONARY,
             "dictionary has more than {MAX_DICTIONARY} entries"
         );
+        ensure!(
+            self.cleanup_instructions.chars().count() <= MAX_CLEANUP_INSTRUCTIONS,
+            "cleanup instructions must be at most {MAX_CLEANUP_INSTRUCTIONS} characters"
+        );
         for e in &self.dictionary {
             ensure!(!e.from.trim().is_empty(), "dictionary entry has an empty word");
             ensure!(
@@ -227,6 +236,7 @@ mod tests {
         assert_eq!(json["pasteLastHotkey"], "Alt+Shift+Z");
         assert_eq!(json["dictionary"], serde_json::json!([]));
         assert_eq!(json["sounds"], false);
+        assert_eq!(json["cleanupInstructions"], "");
     }
 
     #[test]
@@ -247,6 +257,7 @@ mod tests {
             paste_last_hotkey: String::new(),
             dictionary: vec![DictEntry { from: "voks flow".into(), to: "VoxFlow".into() }],
             sounds: true,
+            cleanup_instructions: "Use British spelling.\nNo emoji.".into(),
             ..Default::default()
         };
         s.save(&path).unwrap();
@@ -257,6 +268,7 @@ mod tests {
         assert!(raw.contains("\"cleanup\": \"ai\""));
         assert!(raw.contains("\"pasteLastHotkey\": \"\""));
         assert!(raw.contains("\"from\": \"voks flow\""));
+        assert!(raw.contains(r#""cleanupInstructions": "Use British spelling.\nNo emoji.""#));
     }
 
     #[test]
@@ -290,6 +302,7 @@ mod tests {
         assert_eq!(s.ai, AiConfig::default());
         assert_eq!(s.paste_last_hotkey, "Alt+Shift+Z"); // pre-v3 file
         assert!(s.dictionary.is_empty() && !s.sounds);
+        assert_eq!(s.cleanup_instructions, ""); // pre-v4 file
     }
 
     #[test]
@@ -322,6 +335,7 @@ mod tests {
         assert!(bad(|s| s.dictionary = vec![entry(&"a".repeat(101), "x")]));
         assert!(bad(|s| s.dictionary = vec![entry("a", &"é".repeat(101))]));
         assert!(bad(|s| s.dictionary = vec![DictEntry { from: "a".into(), to: "b".into() }; 201]));
+        assert!(bad(|s| s.cleanup_instructions = "é".repeat(2001)));
         let mut ok = Settings::default();
         ok.remote.base_url = "http://localhost:8000/v1".into();
         ok.language = "de".into();
@@ -330,6 +344,7 @@ mod tests {
         assert!(ok.validate().is_ok());
         ok.paste_last_hotkey = String::new(); // disabled
         ok.dictionary = vec![DictEntry { from: "é".repeat(100), to: String::new() }; 200];
+        ok.cleanup_instructions = "é".repeat(2000);
         assert!(ok.validate().is_ok());
     }
 }

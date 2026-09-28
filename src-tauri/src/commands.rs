@@ -250,7 +250,7 @@ pub async fn cleanup_preview(app: AppHandle, text: String) -> Res<CleanupPreview
         let (ai, ai_error) = if s.ai.base_url.trim().is_empty() {
             (None, Some("AI server not configured".to_owned()))
         } else {
-            match cleanup::ai(&text, &s.language, &s.ai, ai_key().as_deref()) {
+            match cleanup::ai(&text, &s.language, &s.ai, &s.cleanup_instructions, ai_key().as_deref()) {
                 Ok(t) => (Some(t), None),
                 Err(e) => (None, Some(err(e))),
             }

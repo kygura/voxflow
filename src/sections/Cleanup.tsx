@@ -1,6 +1,6 @@
 // DESIGN.md §3.5 — cleanup mode + AI provider configuration.
 import { useEffect, useState } from "react";
-import type { Settings } from "../lib/ipc";
+import { MAX_CLEANUP_INSTRUCTIONS, type Settings } from "../lib/ipc";
 import { api } from "../lib/api";
 import {
   ApiKeyField,
@@ -12,8 +12,18 @@ import {
   Segmented,
   SectionHeader,
   Select,
+  Textarea,
   useSavedFlash,
 } from "../components/ui";
+
+const codePointCount = (s: string) => [...s].length;
+
+const CLEANUP_INSTRUCTIONS_PLACEHOLDER = [
+  "Keep technical terms as spoken (Tauri, WSL, cargo)",
+  "Use British spelling",
+  "Format spoken lists as bullet points",
+  "Never translate; keep Spanish and English mixed as spoken",
+].join("\n");
 
 type Preset = "ollama" | "lm_studio" | "openai" | "groq" | "openrouter" | "anthropic" | "custom";
 
@@ -216,6 +226,67 @@ export function Cleanup({
           </div>
         </Field>
       </Card>
+
+      <CustomInstructions settings={settings} onSave={save} />
     </>
+  );
+}
+
+function CustomInstructions({
+  settings,
+  onSave,
+}: {
+  settings: Settings;
+  onSave: (patch: Partial<Settings>) => Promise<boolean | string>;
+}) {
+  const [draft, setDraft] = useState(settings.cleanupInstructions);
+  const [saving, setSaving] = useState(false);
+
+  // Saved value changed from outside this box (e.g. settings reloaded after a
+  // save error elsewhere) — follow it, same as Cleanup's baseUrl/model state.
+  useEffect(() => setDraft(settings.cleanupInstructions), [settings.cleanupInstructions]);
+
+  const count = codePointCount(draft);
+  const dirty = draft !== settings.cleanupInstructions;
+  const tooLong = count > MAX_CLEANUP_INSTRUCTIONS;
+  const canSave = dirty && !tooLong && !saving;
+
+  const doSave = async () => {
+    if (!canSave) return;
+    setSaving(true);
+    await onSave({ cleanupInstructions: draft });
+    setSaving(false);
+  };
+
+  return (
+    <Card className={`cleanup-instructions${settings.cleanup !== "ai" ? " box--dimmed" : ""}`}>
+      <CardTitle>Custom instructions</CardTitle>
+      <Field
+        label="Instructions"
+        helper="Applied to AI cleanup only. Basic cleanup ignores these. Playground uses saved instructions."
+        error={tooLong ? `Too long — trim to ${MAX_CLEANUP_INSTRUCTIONS} characters.` : undefined}
+      >
+        <Textarea
+          rows={6}
+          value={draft}
+          placeholder={CLEANUP_INSTRUCTIONS_PLACEHOLDER}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) doSave();
+          }}
+        />
+      </Field>
+      <p className={`char-counter${count >= 1900 ? " char-counter--warn" : ""}`}>
+        {count} / {MAX_CLEANUP_INSTRUCTIONS}
+      </p>
+      <div className="cleanup-instructions-actions">
+        <Button variant="primary" disabled={!canSave} loading={saving} onClick={doSave}>
+          Save
+        </Button>
+        <Button variant="secondary" disabled={!dirty} onClick={() => setDraft(settings.cleanupInstructions)}>
+          Reset
+        </Button>
+      </div>
+    </Card>
   );
 }

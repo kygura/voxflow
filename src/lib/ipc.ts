@@ -27,6 +27,7 @@ const max100CodePoints = <T extends z.ZodString>(schema: T) =>
   schema.refine((s) => codePointCount(s) <= 100, { message: "String must contain at most 100 character(s)" });
 
 export const MAX_DICT = 200;
+export const MAX_CLEANUP_INSTRUCTIONS = 2000;
 
 export const DictEntrySchema = z.object({
   from: max100CodePoints(z.string().min(1)),
@@ -47,6 +48,13 @@ export const SettingsSchema = z.object({
   saveHistory: z.boolean(),
   theme: ThemeSchema,
   cleanup: CleanupModeSchema,
+  // AI cleanup only; free-form guidance appended to the cleanup prompt. Rust
+  // counts `.chars().count()` — count code points here too (see codePointCount above).
+  cleanupInstructions: z
+    .string()
+    .refine((s) => codePointCount(s) <= MAX_CLEANUP_INSTRUCTIONS, {
+      message: `String must contain at most ${MAX_CLEANUP_INSTRUCTIONS} character(s)`,
+    }),
   ai: z.object({ baseUrl: z.string(), model: z.string() }),
   pasteLastHotkey: z.string(),
   dictionary: z.array(DictEntrySchema).max(MAX_DICT),

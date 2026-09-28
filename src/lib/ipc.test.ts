@@ -9,6 +9,7 @@ import {
   DownloadProgressSchema,
   DownloadDoneSchema,
   CleanupPreviewSchema,
+  MAX_CLEANUP_INSTRUCTIONS,
 } from "./ipc";
 
 const goodSettings = {
@@ -24,6 +25,7 @@ const goodSettings = {
   saveHistory: true,
   theme: "system",
   cleanup: "basic",
+  cleanupInstructions: "",
   ai: { baseUrl: "http://localhost:11434/v1", model: "llama3.2" },
   pasteLastHotkey: "Alt+Shift+Z",
   dictionary: [{ from: "vox flow", to: "VoxFlow" }],
@@ -114,6 +116,30 @@ describe("SPEC-shaped payloads", () => {
       CleanupPreviewSchema.parse({ basic: "clean text", aiError: "no key" }),
     ).toBeTruthy();
     expect(() => CleanupPreviewSchema.parse({ ai: "only ai" })).toThrow();
+  });
+
+  test("cleanupInstructions defaults to empty and enforces a 2000-code-point cap", () => {
+    expect(SettingsSchema.parse(goodSettings).cleanupInstructions).toBe("");
+    expect(
+      SettingsSchema.parse({ ...goodSettings, cleanupInstructions: "a".repeat(2000) })
+        .cleanupInstructions,
+    ).toHaveLength(2000);
+    expect(() =>
+      SettingsSchema.parse({ ...goodSettings, cleanupInstructions: "a".repeat(2001) }),
+    ).toThrow();
+    // Astral-plane emoji: 1 code point each, 2 UTF-16 units — must count code
+    // points like the Rust side (`.chars().count()`), not `.length`.
+    const emoji2000 = "🎉".repeat(MAX_CLEANUP_INSTRUCTIONS);
+    expect(emoji2000.length).toBe(MAX_CLEANUP_INSTRUCTIONS * 2);
+    expect(
+      SettingsSchema.parse({ ...goodSettings, cleanupInstructions: emoji2000 }).cleanupInstructions,
+    ).toBe(emoji2000);
+    expect(() =>
+      SettingsSchema.parse({
+        ...goodSettings,
+        cleanupInstructions: "🎉".repeat(MAX_CLEANUP_INSTRUCTIONS + 1),
+      }),
+    ).toThrow();
   });
 
   test("DownloadProgress / DownloadDone", () => {

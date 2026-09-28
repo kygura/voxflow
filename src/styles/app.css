@@ -264,6 +264,42 @@ textarea {
   margin: 0 0 4px;
 }
 
+/* Cleanup mode != "ai": editable, just visually de-emphasized (no pointer-events change). */
+.box--dimmed {
+  opacity: 0.55;
+}
+
+.char-counter {
+  text-align: right;
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+  margin: 6px 0 14px;
+}
+
+.char-counter--warn {
+  color: var(--err);
+}
+
+.cleanup-instructions-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-3);
+  padding-bottom: 16px;
+}
+
+/* Prose input: label above a full-width textarea in the UI font. */
+.cleanup-instructions .field {
+  grid-template-columns: 1fr;
+  gap: var(--sp-3);
+}
+
+.cleanup-instructions .textarea {
+  font-family: inherit;
+  font-size: var(--fs-md);
+  line-height: 1.5;
+}
+
 .field {
   display: grid;
   grid-template-columns: minmax(200px, 300px) 1fr;

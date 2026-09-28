@@ -28,6 +28,7 @@ let settings: Settings = {
   saveHistory: true,
   theme: "system",
   cleanup: "basic",
+  cleanupInstructions: "",
   ai: { baseUrl: "http://localhost:11434/v1", model: "llama3.2" },
   pasteLastHotkey: "Alt+Shift+Z",
   dictionary: [{ from: "vox flow", to: "VoxFlow" }],

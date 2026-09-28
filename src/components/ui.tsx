@@ -108,8 +108,8 @@ export function SectionHeader({
   );
 }
 
-export function Card({ children }: { children: ReactNode }) {
-  return <div className="box">{children}</div>;
+export function Card({ children, className }: { children: ReactNode; className?: string }) {
+  return <div className={`box${className ? ` ${className}` : ""}`}>{children}</div>;
 }
 
 export function CardTitle({ children }: { children: ReactNode }) {
