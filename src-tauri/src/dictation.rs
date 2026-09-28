@@ -109,6 +109,8 @@ pub enum Input {
     /// Done/Error display time is over → idle.
     Expire(u64),
     HideWindow(u64),
+    /// Mouse entered (true) / left (false) the pill bubble: holds the done/error display.
+    Hold(bool),
 }
 
 /// Esc cancels. Also Esc plus the hotkey's modifiers, so Esc works while a push-to-talk
@@ -147,14 +149,19 @@ fn triage(result: Result<Outcome, String>) -> Step {
     }
 }
 
-/// Done message and display time (DESIGN §2.3).
+/// Error display time (DESIGN §2.9).
+const ERROR_MS: u64 = 3500;
+/// Display time left after the mouse leaves a held bubble.
+const RELEASE_MS: u64 = 1200;
+
+/// Done message and display time (DESIGN §2.9).
 fn done_message(delivered: Delivered, ai_failed: bool) -> (String, u64) {
     let (msg, ms) = match delivered {
-        Delivered::Pasted => ("Pasted", 1600),
-        Delivered::Copied => ("Copied", 2000),
+        Delivered::Pasted => ("Pasted", 2200),
+        Delivered::Copied => ("Copied", 2600),
     };
     if ai_failed {
-        (format!("{msg} · AI cleanup failed, used basic"), 2400)
+        (format!("{msg} · AI cleanup failed, used basic"), 3000)
     } else {
         (msg.to_owned(), ms)
     }
@@ -203,6 +210,9 @@ struct Worker {
     playback: Option<Sender<()>>,
     /// Current recording has delivered audio (warm-up check).
     heard: bool,
+    /// Generation whose done/error display the mouse is holding; any new session bumps
+    /// `gen`, which releases it.
+    held: Option<u64>,
 }
 
 pub fn spawn(app: AppHandle, tx: Sender<Input>, rx: Receiver<Input>) {
@@ -219,6 +229,7 @@ pub fn spawn(app: AppHandle, tx: Sender<Input>, rx: Receiver<Input>) {
         demo_left: 0,
         playback: None,
         heard: false,
+        held: None,
     };
     thread::Builder::new()
         .name("voxflow-dictation".into())
@@ -315,8 +326,16 @@ impl Worker {
             Input::DemoLevel(gen, level) if gen == self.gen && self.demo && self.phase == Phase::Recording => {
                 let _ = self.app.emit_to("pill", "dictation://level", LevelEvent { level });
             }
-            Input::Expire(gen) if gen == self.gen && matches!(self.phase, Phase::Done | Phase::Error) => {
+            Input::Expire(gen)
+                if gen == self.gen && self.held != Some(gen) && matches!(self.phase, Phase::Done | Phase::Error) =>
+            {
                 self.go_idle()
+            }
+            Input::Hold(true) => self.held = Some(self.gen),
+            Input::Hold(false) => {
+                if self.held.take() == Some(self.gen) {
+                    self.after(RELEASE_MS, Input::Expire(self.gen));
+                }
             }
             Input::HideWindow(gen) if gen == self.gen && self.phase == Phase::Idle => {
                 if let Some(pill) = self.app.get_webview_window("pill") {
@@ -454,10 +473,12 @@ impl Worker {
 
     /// Paste-last hotkey: same output path as a dictation (no history, no raw), done flash.
     fn paste_last(&mut self) {
-        let Some(text) = crate::last_transcript(&self.app) else { return };
-        let s = self.settings();
         self.gen += 1; // a pending Expire/HideWindow from the previous done state is stale
         show_pill(&self.app);
+        let Some(text) = crate::last_transcript(&self.app) else {
+            return self.fail("Nothing to paste yet".into());
+        };
+        let s = self.settings();
         self.wait_hotkey_release();
         let delivered = match deliver(&text, s.auto_paste, s.restore_clipboard) {
             Ok(d) => d,
@@ -547,7 +568,7 @@ impl Worker {
         self.set_esc(false);
         self.state().status.lock().unwrap().last_error = Some(msg.clone());
         self.emit(Phase::Error, Some(&msg));
-        self.after(3000, Input::Expire(self.gen));
+        self.after(ERROR_MS, Input::Expire(self.gen));
     }
 
     fn go_idle(&mut self) {
@@ -627,7 +648,8 @@ fn transcribe(state: &AppState, s: &Settings, audio: &[f32]) -> Result<String, S
 }
 
 /// Bottom-center of the monitor under the cursor (else primary), DESIGN §2.1: window bottom
-/// 14 px above the work-area bottom, so the pill body (10 px bottom margin) sits 24 px above it.
+/// 12 px above the work-area bottom (62 px without work-area info), so the pill body (12 px
+/// bottom margin) sits 24 px above it.
 fn show_pill(app: &AppHandle) {
     let Some(pill) = app.get_webview_window("pill") else { return };
     let monitor = app
@@ -685,10 +707,10 @@ mod tests {
         assert!(matches!(triage(Err("boom".into())), Step::Fail(m) if m == "boom"));
         #[rustfmt::skip]
         let table = [
-            (Delivered::Pasted, false, "Pasted", 1600),
-            (Delivered::Copied, false, "Copied", 2000),
-            (Delivered::Pasted, true, "Pasted · AI cleanup failed, used basic", 2400),
-            (Delivered::Copied, true, "Copied · AI cleanup failed, used basic", 2400),
+            (Delivered::Pasted, false, "Pasted", 2200),
+            (Delivered::Copied, false, "Copied", 2600),
+            (Delivered::Pasted, true, "Pasted · AI cleanup failed, used basic", 3000),
+            (Delivered::Copied, true, "Copied · AI cleanup failed, used basic", 3000),
         ];
         for (d, ai_failed, msg, ms) in table {
             assert_eq!(done_message(d, ai_failed), (msg.to_owned(), ms), "{d:?} {ai_failed}");

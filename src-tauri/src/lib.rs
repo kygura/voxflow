@@ -276,6 +276,7 @@ pub fn run() {
             commands::start_dictation,
             commands::stop_dictation,
             commands::cancel_dictation,
+            commands::hold_pill,
             commands::get_status,
             commands::open_data_dir,
             commands::set_ai_key,

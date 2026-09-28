@@ -245,6 +245,7 @@ pub async fn test_ai(app: AppHandle) -> Res<String> {
 pub async fn cleanup_preview(app: AppHandle, text: String) -> Res<CleanupPreview> {
     let s = app.state::<AppState>().settings.lock().unwrap().clone();
     tauri::async_runtime::spawn_blocking(move || {
+        let text = cleanup::apply_dictionary(&text, &s.dictionary);
         let basic = cleanup::basic(&text, &s.language);
         let (ai, ai_error) = if s.ai.base_url.trim().is_empty() {
             (None, Some("AI server not configured".to_owned()))
@@ -343,6 +344,12 @@ pub fn stop_dictation(state: State<AppState>) {
 #[tauri::command]
 pub fn cancel_dictation(state: State<AppState>) {
     let _ = state.tx.send(Input::Cancel);
+}
+
+/// Mouse over the pill bubble: pauses done/error auto-dismiss until released.
+#[tauri::command]
+pub fn hold_pill(state: State<AppState>, hold: bool) {
+    let _ = state.tx.send(Input::Hold(hold));
 }
 
 #[tauri::command]
