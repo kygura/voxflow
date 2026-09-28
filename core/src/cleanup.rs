@@ -2,7 +2,7 @@
 //! OpenAI-compatible `ai` pass that falls back to `basic` on any failure.
 
 use crate::settings::{AiConfig, Cleanup, Settings};
-use crate::transcribe::remote::{http_error, key_transport_ok};
+use crate::transcribe::remote::{http_error, key_transport_ok, read_body};
 use anyhow::{bail, ensure, Context, Result};
 use std::time::Duration;
 
@@ -149,13 +149,39 @@ fn remove(toks: &mut Vec<Tok>, i: usize, n: usize) -> usize {
     let next = toks.get(i + n);
     let next_delim = next.is_some_and(is_delim);
     let next_end = next.is_none_or(is_terminal);
-    let start = if i > 0 && is_comma(&toks[i - 1]) && (next_delim || next_end) {
+    let prev_comma = i > 0 && is_comma(&toks[i - 1]);
+    if prev_comma && next_delim && keeps_comma(toks, i - 1, i + n + 1) {
+        toks.drain(i..i + n + 1); // "Well, um, I think" → "Well, I think"
+        return i;
+    }
+    let start = if prev_comma && (next_delim || next_end) {
         i - 1
     } else {
         i
     };
     toks.drain(start..i + n + next_delim as usize);
     start
+}
+
+/// Comma at `c` before a removed filler survives when it closes a one-word segment that is
+/// a discourse marker ("Well,") or a list item ("a, um, b, c"); a mid-clause parenthetical
+/// loses both commas ("It's, like, huge." → "It's huge."). `after` = first token past the filler.
+fn keeps_comma(toks: &[Tok], c: usize, after: usize) -> bool {
+    const MARKERS: &[&str] = &[
+        "well", "wait", "so", "okay", "ok", "oh", "yes", "yeah", "no", "right", "now", "look",
+        "hey", "anyway", "actually", "bueno", "pues", "vale", "mira", "oye", "sí", "bien",
+        "entonces", "claro",
+    ];
+    let word = |k: usize| toks.get(k).filter(|t| t.kind == Kind::Word);
+    let Some(w) = c.checked_sub(1).and_then(word) else {
+        return false;
+    };
+    let before = c.checked_sub(2).map(|k| &toks[k]);
+    let one_word = before.is_none_or(|t| t.kind == Kind::Open || is_terminal(t) || is_comma(t));
+    one_word
+        && (before.is_some_and(is_comma)
+            || MARKERS.contains(&w.text.to_lowercase().as_str())
+            || (word(after).is_some() && toks.get(after + 1).is_some_and(is_comma)))
 }
 
 /// Deterministic cleanup (SPEC v2 "basic"). `lang` is the language setting ("auto" or
@@ -228,9 +254,15 @@ pub fn basic(text: &str, lang: &str) -> String {
     for t in toks {
         if t.kind == Kind::Close {
             let Some(prev) = out.last() else { continue };
-            if prev.kind == Kind::Open
-                || (is_comma(&t) && prev.kind == Kind::Close)
-                || (is_terminal(&t) && is_terminal(prev))
+            if prev.kind == Kind::Open {
+                // "¡Eh! ¡Tú!" → "¡Tú!", "(um) hi" → "hi": the opener goes with its closer.
+                if !is_delim(&t) {
+                    out.pop();
+                }
+                continue;
+            }
+            if (is_comma(&t) && prev.kind == Kind::Close)
+                || (is_terminal(&t) && (is_terminal(prev) || (is_delim(prev) && !is_comma(prev))))
             {
                 continue;
             }
@@ -238,9 +270,12 @@ pub fn basic(text: &str, lang: &str) -> String {
                 out.pop();
             }
         }
+        if t.kind == Kind::Open && out.last().is_some_and(|p| p.kind == Kind::Open && p.text == t.text) {
+            continue;
+        }
         out.push(t);
     }
-    while out.last().is_some_and(is_comma) {
+    while out.last().is_some_and(|t| is_comma(t) || t.kind == Kind::Open) {
         out.pop();
     }
     if !out.iter().any(|t| t.kind == Kind::Word) {
@@ -259,7 +294,8 @@ pub fn basic(text: &str, lang: &str) -> String {
                     let lower = out[k].text.to_lowercase();
                     let pronoun_i = lang == Lang::En
                         && (lower == "i" || lower.starts_with("i'") || lower.starts_with("i’"));
-                    if cap_next || pronoun_i {
+                    let link = out[k].text.contains("://") || out[k].text.contains('@');
+                    if (cap_next && !link) || pronoun_i {
                         let mut c = out[k].text.chars();
                         if let Some(f) = c.next().filter(|f| f.is_lowercase()) {
                             out[k].text = f.to_uppercase().chain(c).collect();
@@ -350,7 +386,7 @@ fn ai_with_timeout(
     }
     let resp = req.send().context("could not reach AI server")?;
     let status = resp.status();
-    let body = resp.text().context("failed to read AI server response")?;
+    let body = read_body(resp)?;
     let json: Option<serde_json::Value> = serde_json::from_str(&body).ok();
     if !status.is_success() {
         bail!(http_error(status, json.as_ref(), body, key));
@@ -483,6 +519,23 @@ mod tests {
             ("es", "¿Bueno, este, qué hacemos?", "¿Qué hacemos?"),
             ("es", "¡Qué bien! mmm sí.", "¡Qué bien! Sí."),
             ("es", "Sí, sí, claro.", "Sí, sí, claro."),
+            ("es", "¡Eh! ¡Tú!", "¡Tú!"),
+            ("es", "¿Eh? ¿Qué hora es?", "¿Qué hora es?"),
+            // --- orphaned openers, clause commas, pins
+            ("en", "(um) hello", "Hello"),
+            ("en", "hello (um) world", "Hello world"),
+            ("en", "hello (um", "Hello"),
+            ("en", "Well, um, I think", "Well, I think"),
+            ("en", "Wait, like, like, what?", "Wait, what?"),
+            ("en", "a, um, b, uh, c", "A, b, c"),
+            ("en", "I think... um.", "I think..."),
+            ("en", "https://example.com/a?b=1", "https://example.com/a?b=1"),
+            ("en", "see https://example.com/a?b=1", "See https://example.com/a?b=1"),
+            ("en", "me@x.org", "me@x.org"),
+            ("en", "It costs $3.50.", "It costs $3.50."),
+            ("en", "UM I THINK", "I THINK"),
+            ("en", "I'm I'm sure.", "I'm sure."),
+            ("en", "Errr hello", "Errr hello"),
             // --- auto detection
             ("auto", "um I think that the plan is good", "I think that the plan is good"),
             ("auto", "eh, creo que la casa es muy bonita", "Creo que la casa es muy bonita"),
@@ -625,11 +678,12 @@ mod tests {
                 "implausibly long",
             ),
             ("200 OK", "not json".to_owned(), "no message content"),
+            ("200 OK", " ".repeat((1 << 20) + 1), "response too large"),
         ];
         for (status, body, reason) in bodies {
             let (base, h) = mock_http(status, &body);
             let c = run(raw, &ai_settings(base), Some("sk-secret"));
-            h.join().unwrap();
+            let _ = h.join(); // the oversized reply may hit a closed socket
             assert_eq!(c.text, "I think so");
             let note = c.note.unwrap();
             assert!(note.contains(reason), "{note}");

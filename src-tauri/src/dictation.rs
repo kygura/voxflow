@@ -5,6 +5,7 @@
 
 use crate::{ai_key, api_key, AppState};
 use serde::Serialize;
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::PathBuf;
 use std::sync::atomic::Ordering;
 use std::sync::mpsc::{Receiver, Sender};
@@ -70,7 +71,7 @@ pub enum Input {
     /// Tray item: start, stop or cancel depending on phase.
     Tray,
     AutoStop(u64),
-    /// Transcript ready, cleanup running (only sent when cleanup is not off).
+    /// Transcript ready, AI cleanup running (basic is instant and skips this state).
     Cleaning(u64),
     /// `paste`: false for "Transcribe file" (clipboard only).
     Transcribed { gen: u64, settings: Box<Settings>, paste: bool, result: Result<Outcome, String> },
@@ -208,7 +209,10 @@ impl Worker {
         if self.demo {
             match input {
                 Input::Esc | Input::Cancel | Input::Stop => return self.abort_demo(),
-                Input::Key { pressed: true, .. } | Input::Start | Input::Tray | Input::File(_) => self.abort_demo(),
+                // A new preview restarts the demo.
+                Input::Key { pressed: true, .. } | Input::Start | Input::Tray | Input::File(_) | Input::Demo(_) => {
+                    self.abort_demo()
+                }
                 _ => {}
             }
         }
@@ -243,8 +247,9 @@ impl Worker {
                 if gen == self.gen && matches!(self.phase, Phase::Transcribing | Phase::Cleaning) =>
             {
                 match result {
-                    // No speech, or only fillers: nothing to paste or save.
-                    Ok(o) if o.cleaned.text.is_empty() => self.go_idle(),
+                    // No speech: nothing to paste or save, silently.
+                    Ok(o) if o.raw.is_empty() => self.go_idle(),
+                    Ok(o) if o.cleaned.text.is_empty() => self.fail("Nothing to paste — only filler words".into()),
                     Ok(o) => self.output(o, &settings, paste),
                     Err(e) => self.fail(e),
                 }
@@ -259,7 +264,7 @@ impl Worker {
             }
             Input::Demo(cycles) if !active && !self.demo && cycles > 0 => {
                 self.gen += 1;
-                self.demo = true;
+                self.set_demo(true);
                 self.demo_left = cycles - 1;
                 self.demo_cycle();
             }
@@ -319,7 +324,10 @@ impl Worker {
     fn process(&self, paste: bool, load: impl FnOnce() -> Result<Vec<f32>, String> + Send + 'static) {
         let (app, tx, gen, settings) = (self.app.clone(), self.tx.clone(), self.gen, self.settings());
         thread::spawn(move || {
-            let result = load().and_then(|audio| {
+            // A panic (e.g. in a decoder) must still report back, or the pill hangs in Transcribing.
+            let result = catch_unwind(AssertUnwindSafe(load))
+                .unwrap_or_else(|_| Err("could not decode file".into()))
+                .and_then(|audio| catch_unwind(AssertUnwindSafe(|| {
                 let duration_ms = audio.len() as u64 * 1000 / 16_000;
                 let raw = transcribe(&app.state::<AppState>(), &settings, &audio)?;
                 drop(audio);
@@ -327,13 +335,13 @@ impl Worker {
                     let cleaned = Cleaned { text: String::new(), note: None };
                     return Ok(Outcome { raw, cleaned, duration_ms });
                 }
-                if settings.cleanup != Cleanup::Off {
+                if settings.cleanup == Cleanup::Ai {
                     let _ = tx.send(Input::Cleaning(gen));
                 }
                 let key = (settings.cleanup == Cleanup::Ai).then(ai_key).flatten();
                 let cleaned = cleanup::run(&raw, &settings, key.as_deref());
                 Ok(Outcome { raw, cleaned, duration_ms })
-            });
+            })).unwrap_or_else(|_| Err("transcription failed".into())));
             let _ = tx.send(Input::Transcribed { gen, settings: Box::new(settings), paste, result });
         });
     }
@@ -428,15 +436,21 @@ impl Worker {
                     self.demo_left -= 1;
                     self.after(1500, Input::DemoStep(gen, Phase::Recording));
                 } else {
-                    self.demo = false;
+                    self.set_demo(false);
                 }
             }
             Phase::Error => {}
         }
     }
 
+    /// Mirrored into `Status` so commands don't treat a running demo as busy.
+    fn set_demo(&mut self, on: bool) {
+        self.demo = on;
+        self.state().status.lock().unwrap().demo = on;
+    }
+
     fn abort_demo(&mut self) {
-        self.demo = false;
+        self.set_demo(false);
         self.gen += 1; // pending demo steps and levels are now stale
         self.go_idle();
     }
@@ -510,7 +524,8 @@ fn transcribe(state: &AppState, s: &Settings, audio: &[f32]) -> Result<String, S
             if !path.is_file() {
                 return Err(format!("Model {} not downloaded", s.local_model));
             }
-            state.engine.lock().unwrap().transcribe(&path, audio, &s.language)
+            // Survive a poisoned lock: `process` catches a panic mid-transcription.
+            state.engine.lock().unwrap_or_else(|e| e.into_inner()).transcribe(&path, audio, &s.language)
         }
         Backend::Remote => remote::transcribe(&s.remote, api_key().as_deref(), audio, &s.language),
     };

@@ -60,7 +60,12 @@ enum Previous {
 
 /// Transcripts are pasted into arbitrary apps (terminals included): control chars such as
 /// a newline would act as Enter. Replace them with spaces, collapse whitespace, trim.
+/// Bidi overrides and zero-width chars are dropped so pasted text shows what it is.
 pub fn sanitize(text: &str) -> String {
+    let text: String = text
+        .chars()
+        .filter(|c| !matches!(c, '\u{200B}' | '\u{200E}' | '\u{200F}' | '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}' | '\u{FEFF}'))
+        .collect();
     text.split(|c: char| c.is_control() || c.is_whitespace())
         .filter(|w| !w.is_empty())
         .collect::<Vec<_>>()
@@ -84,5 +89,8 @@ mod tests {
         assert_eq!(super::sanitize("rm -rf /\n"), "rm -rf /");
         assert_eq!(super::sanitize("\n\t "), "");
         assert_eq!(super::sanitize("héllo  wörld"), "héllo wörld");
+        assert_eq!(super::sanitize("\u{feff}rm\u{200b} -rf\u{202e} x\u{2066}y\u{2069}\u{200f}"), "rm -rf xy");
+        // ZWNJ/ZWJ are kept: emoji sequences and Indic/Persian scripts need them.
+        assert_eq!(super::sanitize("a\u{200c}b\u{200d}c"), "a\u{200c}b\u{200d}c");
     }
 }

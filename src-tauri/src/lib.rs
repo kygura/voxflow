@@ -20,6 +20,8 @@ pub struct Status {
     pub phase: Phase,
     pub message: Option<String>,
     pub last_error: Option<String>,
+    /// Overlay demo running: real actions and a new preview abort it, so it isn't "busy".
+    pub demo: bool,
 }
 
 pub struct AppState {

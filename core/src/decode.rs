@@ -11,6 +11,8 @@ use symphonia::core::meta::MetadataOptions;
 
 /// Longest file accepted, in seconds (same cap as a recording).
 pub const MAX_SECONDS: u64 = 600;
+/// Highest sample rate accepted; with the duration cap it bounds decoded memory.
+const MAX_RATE: u32 = 384_000;
 
 /// Decode wav/mp3/m4a(aac)/ogg(vorbis)/flac to 16 kHz mono f32.
 pub fn decode_file(path: &Path) -> Result<Vec<f32>> {
@@ -59,6 +61,9 @@ pub fn decode_file(path: &Path) -> Result<Vec<f32>> {
         };
         let (r, channels) = (audio.spec().rate(), audio.spec().channels().count());
         if rate == 0 {
+            if !(8_000..=MAX_RATE).contains(&r) {
+                bail!("unsupported sample rate");
+            }
             rate = r;
         } else if r != rate {
             bail!("sample rate changes mid-file");
@@ -86,7 +91,7 @@ mod tests {
         let mut w = crate::wav::encode_wav_16k_mono(samples);
         w[22..24].copy_from_slice(&channels.to_le_bytes());
         w[24..28].copy_from_slice(&rate.to_le_bytes());
-        w[28..32].copy_from_slice(&(rate * 2 * channels as u32).to_le_bytes());
+        w[28..32].copy_from_slice(&rate.wrapping_mul(2 * channels as u32).to_le_bytes());
         w[32..34].copy_from_slice(&(2 * channels).to_le_bytes());
         w
     }
@@ -110,16 +115,24 @@ mod tests {
     #[test]
     fn rejects_long_garbage_and_missing_files() {
         let dir = crate::test_dir("decode-bad");
-        // 601 s at 1 kHz: over the cap without writing a big file.
+        // 601 s at 8 kHz (the lowest accepted rate): over the cap.
         let long = dir.join("long.wav");
-        std::fs::write(&long, wav(&vec![0.1; 601_000], 1_000, 1)).unwrap();
+        std::fs::write(&long, wav(&vec![0.1; 601 * 8_000], 8_000, 1)).unwrap();
         assert_eq!(
             decode_file(&long).unwrap_err().to_string(),
             "file longer than 10 minutes"
         );
         let ok = dir.join("ok.wav");
-        std::fs::write(&ok, wav(&vec![0.1; 599_000], 1_000, 1)).unwrap();
+        std::fs::write(&ok, wav(&vec![0.1; 599 * 8_000], 8_000, 1)).unwrap();
         assert_eq!(decode_file(&ok).unwrap().len(), 599 * 16_000);
+
+        // Crafted headers: rates outside 8 kHz..=384 kHz are refused before buffering.
+        for rate in [1_000, 7_999, 384_001, 4_000_000_000] {
+            let bad = dir.join(format!("rate{rate}.wav"));
+            std::fs::write(&bad, wav(&[0.1; 1_000], rate, 1)).unwrap();
+            let err = decode_file(&bad).unwrap_err().to_string();
+            assert_eq!(err, "unsupported sample rate", "{rate}");
+        }
 
         let junk = dir.join("junk.mp3");
         std::fs::write(&junk, b"definitely not audio").unwrap();

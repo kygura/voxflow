@@ -138,7 +138,7 @@ All command errors are returned as plain strings.
 ### Cleanup ("conscious editing")
 
 Setting `cleanup: "off" | "basic" | "ai"` (default `basic`). Pipeline after transcription:
-raw text → cleanup → clipboard/paste/history. The pill shows a `cleaning` state while it runs.
+raw text → cleanup → clipboard/paste/history. The pill shows a `cleaning` state while an `ai` cleanup runs (`basic` is instant and skips it).
 
 - **basic** — deterministic, pure Rust in `voxflow-core::cleanup`. Removes fillers (EN: um, uh,
   erm, er, hmm, mm; ES: eh, em, mmm), collapses immediate stutters/repeats ("I I think",

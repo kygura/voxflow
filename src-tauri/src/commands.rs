@@ -217,7 +217,9 @@ pub async fn cleanup_preview(app: AppHandle, text: String) -> Res<CleanupPreview
 }
 
 fn ensure_idle(state: &AppState) -> Res {
-    match state.status.lock().unwrap().phase {
+    let st = state.status.lock().unwrap();
+    match st.phase {
+        _ if st.demo => Ok(()), // the worker aborts (or restarts) the demo
         Phase::Recording | Phase::Transcribing | Phase::Cleaning => {
             Err("Busy: finish or cancel the current dictation first".into())
         }

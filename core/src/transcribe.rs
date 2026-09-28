@@ -129,7 +129,7 @@ pub mod remote {
         // reqwest errors mention the URL, never headers, so the key can't leak here.
         let resp = req.send().context("could not reach transcription server")?;
         let status = resp.status();
-        let body = resp.text().context("failed to read server response")?;
+        let body = read_body(resp)?;
         let json: Option<serde_json::Value> = serde_json::from_str(&body).ok();
         if !status.is_success() {
             bail!(http_error(status, json.as_ref(), body, key));
@@ -138,6 +138,23 @@ pub mod remote {
             Some(text) => Ok(text.trim().to_owned()),
             None => bail!("server response has no \"text\" field"),
         }
+    }
+
+    /// Response body, at most 1 MiB ("response too large" otherwise).
+    pub(crate) fn read_body(resp: reqwest::blocking::Response) -> Result<String> {
+        use std::io::Read;
+        const MAX: u64 = 1 << 20;
+        if resp.content_length().is_some_and(|n| n > MAX) {
+            bail!("response too large");
+        }
+        let mut buf = Vec::new();
+        resp.take(MAX + 1)
+            .read_to_end(&mut buf)
+            .context("failed to read server response")?;
+        if buf.len() as u64 > MAX {
+            bail!("response too large");
+        }
+        Ok(String::from_utf8_lossy(&buf).into_owned())
     }
 
     /// "server returned <status>: <message>" from an OpenAI-style error body,
@@ -286,6 +303,11 @@ pub mod remote {
             h.join().unwrap();
             let msg = err.to_string();
             assert!(msg.contains("500") && msg.len() < 400, "{msg}");
+
+            let (base, h) = mock("200 OK", &" ".repeat((1 << 20) + 1));
+            let err = test(&cfg(base), None).unwrap_err();
+            let _ = h.join(); // the oversized reply may hit a closed socket
+            assert_eq!(err.to_string(), "response too large");
         }
     }
 }
