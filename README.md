@@ -173,3 +173,7 @@ bun run dev           # Browser preview (mock backend, no Tauri IPC)
 - **Wayland:** Global hotkeys do not work; Ctrl+V paste may fail (copy-to-clipboard fallback provided)
 - **Modifier-only hotkeys:** Not supported (e.g., can't use Ctrl+Win with no letter; register shortcuts must include at least one non-modifier key)
 - **Model checksums:** Downloads are pinned to a fixed whisper.cpp HuggingFace commit and verified by size and SHA-256 before use
+
+## License
+
+[NSSL v1.0](LICENSE): the No-Subscription Slop License. Vibecoded because $20/month for dictation is a lot. Legally, it is the MIT License with a joke on top.
