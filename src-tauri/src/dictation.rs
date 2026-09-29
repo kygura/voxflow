@@ -101,11 +101,6 @@ pub enum Input {
     Transcribed { gen: u64, settings: Box<Settings>, paste: bool, result: Result<Outcome, String> },
     /// Transcribe an audio file through the same pipeline as a recording.
     File(PathBuf),
-    /// Run the overlay demo this many times (no mic, clipboard, paste or history).
-    Demo(u32),
-    /// Demo timer: move to this phase (`Recording` = next cycle).
-    DemoStep(u64, Phase),
-    DemoLevel(u64, f32),
     /// Done/Error display time is over → idle.
     Expire(u64),
     HideWindow(u64),
@@ -181,11 +176,6 @@ struct StateEvent<'a> {
     raw: Option<&'a str>,
 }
 
-/// What Whisper might hear from the demo clip ([`audio::DEMO_CLIP_TEXT`]): the clip is clean
-/// read speech, so this is a hand-made disfluent version of it for basic cleanup to fix.
-const DEMO_RAW: &str =
-    "um the work wasn't uh finished at 11:00 p.m. Friday, so they they decided to carry it over to the following Monday.";
-
 #[derive(Serialize, Clone)]
 struct LevelEvent {
     level: f32,
@@ -202,11 +192,7 @@ struct Worker {
     gen: u64,
     /// Esc shortcuts currently registered (empty = none).
     esc_registered: Vec<Shortcut>,
-    /// Overlay demo running (any phase, including the gap between cycles).
-    demo: bool,
-    /// Demo cycles still to run after the current one.
-    demo_left: u32,
-    /// Demo clip or sound cue playing; dropping it stops the sound.
+    /// Sound cue playing; dropping it stops the sound.
     playback: Option<Sender<()>>,
     /// Current recording has delivered audio (warm-up check).
     heard: bool,
@@ -225,8 +211,6 @@ pub fn spawn(app: AppHandle, tx: Sender<Input>, rx: Receiver<Input>) {
         hands_free: false,
         gen: 0,
         esc_registered: Vec::new(),
-        demo: false,
-        demo_left: 0,
         playback: None,
         heard: false,
         held: None,
@@ -251,22 +235,6 @@ impl Worker {
     }
 
     fn handle(&mut self, input: Input) {
-        // Real activity aborts the demo: Esc/cancel/stop just hide it, a start or file proceeds.
-        if self.demo {
-            match input {
-                Input::Esc | Input::Cancel | Input::Stop => return self.abort_demo(),
-                // A new preview restarts the demo.
-                Input::Key { pressed: true, .. }
-                | Input::Start
-                | Input::Tray
-                | Input::File(_)
-                | Input::Demo(_)
-                | Input::PasteLast => {
-                    self.abort_demo()
-                }
-                _ => {}
-            }
-        }
         let active = matches!(self.phase, Phase::Recording | Phase::Transcribing | Phase::Cleaning);
         let ok = admits(&input, self.gen, self.phase, self.hands_free, self.heard);
         match input {
@@ -315,16 +283,6 @@ impl Worker {
                 self.set_esc(true);
                 self.emit(Phase::Transcribing, None);
                 self.process(false, move || decode::decode_file(&path).map_err(|e| format!("{e:#}")));
-            }
-            Input::Demo(cycles) if !active && !self.demo && cycles > 0 => {
-                self.gen += 1;
-                self.set_demo(true);
-                self.demo_left = cycles - 1;
-                self.demo_cycle();
-            }
-            Input::DemoStep(gen, next) if gen == self.gen && self.demo => self.demo_step(next),
-            Input::DemoLevel(gen, level) if gen == self.gen && self.demo && self.phase == Phase::Recording => {
-                let _ = self.app.emit_to("pill", "dictation://level", LevelEvent { level });
             }
             Input::Expire(gen)
                 if gen == self.gen && self.held != Some(gen) && matches!(self.phase, Phase::Done | Phase::Error) =>
@@ -489,79 +447,6 @@ impl Worker {
         self.after(ms, Input::Expire(self.gen));
     }
 
-    fn demo_cycle(&mut self) {
-        self.hands_free = true;
-        show_pill(&self.app);
-        self.set_esc(true);
-        self.emit(Phase::Recording, None);
-        let (tx, gen) = (self.tx.clone(), self.gen);
-        // Real audio: the bundled clip's level envelope, streamed in real time through the
-        // same level path as the mic while the clip plays on the speakers.
-        let clip = voxflow_core::decode::decode_bytes(audio::DEMO_CLIP, "mp3").unwrap_or_else(|e| {
-            eprintln!("voxflow: demo clip: {e:#}");
-            Vec::new()
-        });
-        let levels = audio::envelope(&clip);
-        let block = Duration::from_millis(audio::LEVEL_BLOCK_MS);
-        let len = block * levels.len() as u32;
-        self.playback = Some(audio::play(clip));
-        thread::spawn(move || {
-            let start = Instant::now();
-            for (i, level) in levels.into_iter().enumerate() {
-                // Paced by wall clock (block i ends at (i+1)·block), so sleeps don't drift.
-                thread::sleep((start + block * (i as u32 + 1)).saturating_duration_since(Instant::now()));
-                if tx.send(Input::DemoLevel(gen, level)).is_err() {
-                    break;
-                }
-            }
-        });
-        self.after(len.as_millis() as u64, Input::DemoStep(gen, Phase::Transcribing));
-    }
-
-    fn demo_step(&mut self, next: Phase) {
-        let gen = self.gen;
-        match next {
-            Phase::Recording => self.demo_cycle(),
-            Phase::Transcribing => {
-                self.playback = None;
-                self.emit(Phase::Transcribing, None);
-                self.after(1200, Input::DemoStep(gen, Phase::Cleaning));
-            }
-            Phase::Cleaning => {
-                self.emit(Phase::Cleaning, None);
-                self.after(900, Input::DemoStep(gen, Phase::Done));
-            }
-            Phase::Done => {
-                let text = cleanup::basic(DEMO_RAW, "en");
-                self.emit_full(Phase::Done, Some("Pasted"), Some(&text), Some(DEMO_RAW));
-                self.after(2000, Input::DemoStep(gen, Phase::Idle));
-            }
-            Phase::Idle => {
-                self.go_idle();
-                if self.demo_left > 0 {
-                    self.demo_left -= 1;
-                    self.after(1500, Input::DemoStep(gen, Phase::Recording));
-                } else {
-                    self.set_demo(false);
-                }
-            }
-            Phase::Error => {}
-        }
-    }
-
-    /// Mirrored into `Status` so commands don't treat a running demo as busy.
-    fn set_demo(&mut self, on: bool) {
-        self.demo = on;
-        self.state().status.lock().unwrap().demo = on;
-    }
-
-    fn abort_demo(&mut self) {
-        self.playback = None;
-        self.set_demo(false);
-        self.gen += 1; // pending demo steps and levels are now stale
-        self.go_idle();
-    }
-
     fn fail(&mut self, msg: String) {
         eprintln!("voxflow: dictation error: {msg}");
         self.recorder = None;
@@ -685,11 +570,6 @@ mod tests {
         assert_eq!(keys.len(), 2);
         assert_eq!(keys[0], esc);
         assert_eq!(keys[1], "CommandOrControl+Shift+Escape".parse::<Shortcut>().unwrap());
-    }
-
-    #[test]
-    fn demo_raw_cleans_to_clip_text() {
-        assert_eq!(cleanup::basic(DEMO_RAW, "en"), audio::DEMO_CLIP_TEXT);
     }
 
     #[test]

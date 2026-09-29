@@ -30,10 +30,8 @@ First run: download a model in Settings → Transcription (local), or add an API
 
 ## Trying it without a microphone
 
-- **Preview overlay** (Settings): runs the pill through a demo cycle with a bundled speech clip ([credits](docs/ASSETS.md))
 - **Transcribe file…** (Settings): wav/mp3/m4a/ogg/flac, up to 10 minutes
 - **Cleanup playground** (Settings): compare basic vs AI cleanup on pasted text
-- `--demo` flag: `bun tauri dev -- -- --demo`
 
 ## Building
 

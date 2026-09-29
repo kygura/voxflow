@@ -68,14 +68,6 @@ export function About({ settings, status }: { settings: Settings; status: Status
           <dt>Last error</dt>
           <dd className="mono about-last-error">{status.lastError ?? "None"}</dd>
         </div>
-        <div className="about-row">
-          <dt>Audio credits</dt>
-          <dd>
-            Demo voice clip by Auride, Tatoeba audio #1042417
-            (https://tatoeba.org/en/audio/download/1042417), CC BY-SA 4.0
-            (https://creativecommons.org/licenses/by-sa/4.0/).
-          </dd>
-        </div>
       </dl>
 
       <CardTitle>Shortcuts</CardTitle>

@@ -143,38 +143,17 @@ function startSyntheticSpeechLevel() {
   }, 25);
 }
 
-// DESIGN.md §6 demo sample: raw transcript -> cleaned transcript. Matches
-// src-tauri/src/dictation.rs DEMO_RAW and core/src/audio.rs DEMO_CLIP_TEXT
-// (the bundled demo clip's actual sentence, docs/ASSETS.md).
-const DEMO_RAW =
+// Sample raw transcript -> cleaned transcript for the browser mock.
+const SAMPLE_RAW =
   "um the work wasn't uh finished at 11:00 p.m. Friday, so they they decided to carry it over to the following Monday.";
-const DEMO_TEXT =
+const SAMPLE_TEXT =
   "The work wasn't finished at 11:00 p.m. Friday, so they decided to carry it over to the following Monday.";
 // ?state=done&long=1 — a 6-line sample to verify the bubble's 4-line clamp.
-const DEMO_LONG_TEXT =
+const SAMPLE_LONG_TEXT =
   "So I think we should ship the new build on Friday, no wait, actually Monday " +
   "makes more sense given the QA backlog. Let me check with the team first and " +
   "get back to you about the exact timeline once I know how testing is going, " +
   "because I don't want to commit to a date we can't actually hit this time.";
-
-let demoTimer: ReturnType<typeof setTimeout> | null = null;
-function runDemoSequence() {
-  cancelAutoHide();
-  if (demoTimer) clearTimeout(demoTimer);
-  emitState({ state: "recording", mode: "toggle" });
-  startSyntheticSpeechLevel();
-  demoTimer = setTimeout(() => {
-    stopLevelStream();
-    emitState({ state: "transcribing" });
-    demoTimer = setTimeout(() => {
-      emitState({ state: "cleaning" });
-      demoTimer = setTimeout(() => {
-        emitState({ state: "done", message: "Pasted", text: DEMO_TEXT, raw: DEMO_RAW });
-        scheduleAutoHide("done", "Pasted");
-      }, 900);
-    }, 1200);
-  }, 4000);
-}
 
 /** ponytail: mock-only filler/stutter strip, real cleanup lives in voxflow-core::cleanup (Rust). */
 function mockBasicCleanup(raw: string): string {
@@ -227,8 +206,8 @@ export const mockApi = {
         history = [
           {
             id: String(Date.now()),
-            text: DEMO_TEXT,
-            raw: DEMO_RAW,
+            text: SAMPLE_TEXT,
+            raw: SAMPLE_RAW,
             createdAt: Date.now(),
             backend: settings.backend,
             model: settings.backend === "local" ? settings.localModel : settings.remote.model,
@@ -237,13 +216,10 @@ export const mockApi = {
           ...history,
         ];
         emitHistoryChanged();
-        emitState({ state: "done", message: "Copied", text: DEMO_TEXT, raw: DEMO_RAW });
+        emitState({ state: "done", message: "Copied", text: SAMPLE_TEXT, raw: SAMPLE_RAW });
         scheduleAutoHide("done", "Copied");
       }, 900);
     }, 900);
-  },
-  previewOverlay: async () => {
-    runDemoSequence();
   },
   listModels: async (): Promise<ModelInfo[]> =>
     CATALOG.map((m) => ({
@@ -333,7 +309,6 @@ export const mockApi = {
   cancelDictation: async () => {
     cancelAutoHide();
     stopLevelStream();
-    if (demoTimer) clearTimeout(demoTimer);
     emitState({ state: "idle" });
   },
   getStatus: async (): Promise<Status> => ({
@@ -393,8 +368,8 @@ export function forceDictationState(
   cancelAutoHide();
   stopLevelStream();
   if (state === "done") {
-    const text = opts?.long ? DEMO_LONG_TEXT : DEMO_TEXT;
-    const raw = opts?.flash ? undefined : DEMO_RAW;
+    const text = opts?.long ? SAMPLE_LONG_TEXT : SAMPLE_TEXT;
+    const raw = opts?.flash ? undefined : SAMPLE_RAW;
     emitState({ state, message, mode, text, raw });
     scheduleAutoHide("done", message);
   } else {
@@ -403,11 +378,6 @@ export function forceDictationState(
   }
   // ?warmup=1: stay in the warm-up dots — never emit a level event.
   if (state === "recording" && !opts?.warmup) startSyntheticSpeechLevel();
-}
-
-/** Used only by pill.tsx?demo=1 to run the full recording→idle loop. */
-export function startDemoLoop() {
-  runDemoSequence();
 }
 
 export function setMockLastError(msg: string) {

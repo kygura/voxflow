@@ -20,8 +20,6 @@ pub struct Status {
     pub phase: Phase,
     pub message: Option<String>,
     pub last_error: Option<String>,
-    /// Overlay demo running: real actions and a new preview abort it, so it isn't "busy".
-    pub demo: bool,
 }
 
 pub struct AppState {
@@ -135,9 +133,7 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    let demo = std::env::args().any(|a| a == "--demo");
-    let first_run = !demo
-        && settings.backend == Backend::Local
+    let first_run = settings.backend == Backend::Local
         && voxflow_core::models::model_path(&models_dir, &settings.local_model).is_ok_and(|p| !p.is_file());
 
     let (tx, rx) = mpsc::channel();
@@ -155,13 +151,6 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         paste_last_id: AtomicU32::new(paste_last_id),
         tx: tx.clone(),
     });
-    if demo {
-        let tx = tx.clone();
-        std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_secs(1));
-            let _ = tx.send(Input::Demo(5));
-        });
-    }
     dictation::spawn(handle.clone(), tx, rx);
 
     // Main window is `create: false` in tauri.conf so first run can open it on Transcription.
@@ -284,8 +273,7 @@ pub fn run() {
             commands::test_ai,
             commands::cleanup_preview,
             commands::transcribe_file,
-            commands::preview_overlay,
-        ])
+                    ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

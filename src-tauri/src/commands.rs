@@ -263,12 +263,11 @@ pub async fn cleanup_preview(app: AppHandle, text: String) -> Res<CleanupPreview
 
 fn ensure_idle(state: &AppState) -> Res {
     let st = state.status.lock().unwrap();
-    idle_check(st.phase, st.demo)
+    idle_check(st.phase)
 }
 
-fn idle_check(phase: Phase, demo: bool) -> Res {
+fn idle_check(phase: Phase) -> Res {
     match phase {
-        _ if demo => Ok(()), // the worker aborts (or restarts) the demo
         Phase::Recording | Phase::Transcribing | Phase::Cleaning => {
             Err("Busy: finish or cancel the current dictation first".into())
         }
@@ -296,14 +295,6 @@ pub async fn transcribe_file(app: AppHandle) -> Res {
     let state = app.state::<AppState>();
     ensure_idle(&state)?; // a dictation may have started while the picker was open
     let _ = state.tx.send(Input::File(path));
-    Ok(())
-}
-
-/// One demo cycle of the pill (no mic, clipboard, paste or history).
-#[tauri::command]
-pub fn preview_overlay(state: State<AppState>) -> Res {
-    ensure_idle(&state)?;
-    let _ = state.tx.send(Input::Demo(1));
     Ok(())
 }
 
@@ -423,18 +414,17 @@ mod tests {
     }
 
     #[test]
-    fn idle_check_allows_demo_blocks_real_work() {
+    fn idle_check_blocks_real_work() {
         use Phase::*;
-        for (phase, demo, ok) in [
-            (Recording, true, true),
-            (Recording, false, false),
-            (Transcribing, false, false),
-            (Cleaning, false, false),
-            (Idle, false, true),
-            (Done, false, true),
-            (Error, false, true),
+        for (phase, ok) in [
+            (Recording, false),
+            (Transcribing, false),
+            (Cleaning, false),
+            (Idle, true),
+            (Done, true),
+            (Error, true),
         ] {
-            assert_eq!(idle_check(phase, demo).is_ok(), ok, "{phase:?} demo={demo}");
+            assert_eq!(idle_check(phase).is_ok(), ok, "{phase:?}");
         }
     }
 }

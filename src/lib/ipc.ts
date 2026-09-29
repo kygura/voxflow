@@ -152,7 +152,6 @@ export const ipc = {
   cleanupPreview: (text: string) =>
     invoke("cleanup_preview", { text }).then((v) => CleanupPreviewSchema.parse(v)),
   transcribeFile: () => invoke<void>("transcribe_file"),
-  previewOverlay: () => invoke<void>("preview_overlay"),
   listModels: () => invoke("list_models").then((v) => ModelInfoListSchema.parse(v)),
   downloadModel: (name: string) => invoke<void>("download_model", { name }),
   cancelDownload: (name: string) => invoke<void>("cancel_download", { name }),

@@ -7,7 +7,7 @@ pub fn to_16k_mono(interleaved: &[f32], channels: u16, rate: u32) -> Vec<f32> {
     to_mono(interleaved, channels, rate, 16_000)
 }
 
-/// [`to_16k_mono`] with any output rate (demo clip playback at the device rate).
+/// [`to_16k_mono`] with any output rate (sound cue playback at the device rate).
 pub fn to_mono(interleaved: &[f32], channels: u16, rate: u32, out_rate: u32) -> Vec<f32> {
     let out_rate = out_rate as u64;
     if channels == 0 || rate == 0 || out_rate == 0 {

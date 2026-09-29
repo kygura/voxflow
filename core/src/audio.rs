@@ -11,12 +11,6 @@ pub const MIN_SAMPLES: usize = 4_800;
 pub const MAX_DURATION: Duration = Duration::from_secs(600);
 /// Level meter block: one `on_level` value per 25 ms of real input (40 Hz).
 pub const LEVEL_BLOCK_MS: u64 = 25;
-/// Bundled 5.6 s English speech clip (mp3) for the overlay demo; source and license in
-/// docs/ASSETS.md. It says [`DEMO_CLIP_TEXT`].
-pub const DEMO_CLIP: &[u8] = include_bytes!("../assets/demo_speech.mp3");
-pub const DEMO_CLIP_TEXT: &str =
-    "The work wasn't finished at 11:00 p.m. Friday, so they decided to carry it over to the following Monday.";
-
 /// Names of available input devices (for the settings picker).
 pub fn list_input_devices() -> Result<Vec<String>> {
     let host = cpal::default_host();
@@ -51,11 +45,6 @@ fn rms(s: &[f32]) -> f32 {
 pub fn level(block: &[f32]) -> f32 {
     let db = 20.0 * rms(block).max(1e-9).log10();
     ((db + 55.0) / 55.0).clamp(0.0, 1.0).powf(0.8)
-}
-
-/// [`level`] per [`LEVEL_BLOCK_MS`] block of 16 kHz mono audio.
-pub fn envelope(samples: &[f32]) -> Vec<f32> {
-    samples.chunks(16 * LEVEL_BLOCK_MS as usize).map(level).collect()
 }
 
 /// Hands-free auto-stop (SPEC v3): this long of continuous level below [`SILENCE_LEVEL`].
@@ -341,20 +330,6 @@ mod tests {
         // -30 dBFS RMS (typical speech) lands mid-range.
         let l = level(&sine(0.031_62 * 2f32.sqrt()));
         assert!((l - (25.0f32 / 55.0).powf(0.8)).abs() < 0.01, "{l}");
-        assert_eq!(envelope(&vec![0.0; 16_000]).len(), 40); // 1 s = 40 blocks
-    }
-
-    #[test]
-    fn demo_clip_envelope_is_speech_like() {
-        let env = envelope(&crate::decode::decode_bytes(DEMO_CLIP, "mp3").unwrap());
-        let secs = env.len() as f32 * LEVEL_BLOCK_MS as f32 / 1000.0;
-        assert!((4.0..=8.0).contains(&secs), "{secs} s");
-        let first = env.iter().position(|l| *l > 0.5).unwrap();
-        let last = env.iter().rposition(|l| *l > 0.5).unwrap();
-        let peaks = env.iter().filter(|l| **l > 0.5).count();
-        // Pauses *inside* the speech, not just leading/trailing silence.
-        let gaps = env[first..last].iter().filter(|l| **l < 0.2).count();
-        assert!(peaks > env.len() / 3 && gaps >= 2, "peaks {peaks} gaps {gaps} of {}", env.len());
     }
 
     #[test]

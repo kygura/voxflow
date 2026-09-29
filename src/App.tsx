@@ -142,10 +142,6 @@ export default function App() {
     api.transcribeFile().catch((err) => surfaceError(String(err)));
   };
 
-  const previewOverlay = () => {
-    api.previewOverlay().catch((err) => surfaceError(String(err)));
-  };
-
   const dictationStatus: "idle" | "recording" | "transcribing" | "cleaning" =
     status.state === "recording" || status.state === "transcribing" || status.state === "cleaning"
       ? status.state
@@ -160,7 +156,6 @@ export default function App() {
         fileStatus={status.state}
         hotkey={settings.hotkey}
         onTranscribeFile={transcribeFile}
-        onPreviewOverlay={previewOverlay}
       />
       <main className="content-column">
         {status.lastError && !bannerDismissed && (

@@ -173,12 +173,6 @@ absent when identical or for old entries). UI shows cleaned text with a toggle t
   (`voxflow-core::decode`), downmixes + resamples to 16 kHz mono, and runs the same pipeline
   as dictation (transcribe → cleanup → clipboard + history, no auto-paste, pill shows
   transcribing/cleaning/done). Max 10 minutes of audio.
-- **Demo mode** — `preview_overlay` command (settings button "Preview overlay") and CLI flag
-  `--demo`. Drives the real pill through the real events: `recording` (~4 s, a synthetic
-  speech-like level envelope at ~30 Hz on `dictation://level`) → `transcribing` (~1.2 s) →
-  `cleaning` (~0.9 s) → `done` with a sample raw→cleaned text (~2 s) → idle. Never touches the
-  clipboard, never pastes, never writes history. `--demo` repeats the cycle 5 times with a
-  1.5 s gap, starting ~1 s after launch. A real dictation start aborts a running demo.
 - **Cleanup playground** — settings section: paste raw text → `cleanup_preview` shows basic and
   ai outputs side by side (ai column shows its error/fallback note when it fails or isn't
   configured).
@@ -196,15 +190,13 @@ dictation://state payload = { state: "idle"|"recording"|"transcribing"|"cleaning
          text = final text, raw = raw transcript (so the pill can show what was cleaned)
 Commands: set_ai_key(key), clear_ai_key, test_ai -> Ok(string)/Err(string),
           cleanup_preview(text) -> { basic: string, ai?: string, aiError?: string },
-          transcribe_file -> Ok(()) (opens picker; Ok also when user cancels), preview_overlay
+          transcribe_file -> Ok(()) (opens picker; Ok also when user cancels)
 ```
 
 ## v3 — readable UI, transcript bubble, real-audio preview, ergonomics
 
 - **Real audio everywhere.** Mic levels: one `dictation://level` per 25 ms of real input (40 Hz),
-  `level = dB mapped -55..0 → 0..1, gamma 0.8`. The demo/preview streams a bundled real speech
-  clip (docs/ASSETS.md) through the same event path in real time and plays it on the default
-  output device; no synthetic envelopes.
+  `level = dB mapped -55..0 → 0..1, gamma 0.8`.
 - **Transcript bubble.** The pill shows the transcript in a rounded bubble floating above the
   bar (done state; click copies). Layout per DESIGN.md.
 - **Ergonomics adopted** (research: docs/ERGONOMICS.md):

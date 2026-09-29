@@ -1,7 +1,7 @@
 // Shared UI primitives from DESIGN.md §5 component inventory.
 import { forwardRef, useEffect, useId, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { File, Play, Search, X } from "./icons";
+import { File, Search, X } from "./icons";
 
 export function Sidebar({
   active,
@@ -10,7 +10,6 @@ export function Sidebar({
   fileStatus,
   hotkey,
   onTranscribeFile,
-  onPreviewOverlay,
 }: {
   active: string;
   onSelect: (id: string) => void;
@@ -18,7 +17,6 @@ export function Sidebar({
   fileStatus: "idle" | "recording" | "transcribing" | "cleaning" | "done" | "error";
   hotkey: string;
   onTranscribeFile: () => void;
-  onPreviewOverlay: () => void;
 }) {
   const items: { id: string; label: string }[] = [
     { id: "general", label: "General" },
@@ -66,15 +64,6 @@ export function Sidebar({
         >
           <File size={14} />
           {isFileBusy ? "Transcribing…" : "Transcribe file…"}
-        </Button>
-        <Button
-          variant="secondary"
-          className="sidebar-tool-btn"
-          disabled={fileStatus === "recording"}
-          onClick={onPreviewOverlay}
-        >
-          <Play size={14} />
-          Preview overlay
         </Button>
       </div>
       <div className="sidebar-footer">

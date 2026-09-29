@@ -6,7 +6,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import ReactDOM from "react-dom/client";
 import { api, events, isTauri } from "./lib/api";
 import type { DictationStateEvent, DictationStateName } from "./lib/ipc";
-import { forceDictationState, startDemoLoop } from "./lib/mock";
+import { forceDictationState } from "./lib/mock";
 import { Waveform } from "./components/Waveform";
 import { TranscriptBubble } from "./components/TranscriptBubble";
 import { Sweep } from "./components/ui";
@@ -115,15 +115,10 @@ function Pill() {
     };
   }, []);
 
-  // Headless verification only: pill.html?state=X freezes a state, ?demo=1 loops
-  // the full recording→idle sequence with synthetic levels (DESIGN.md §6).
+  // Headless verification only: pill.html?state=X freezes a state (DESIGN.md §6).
   useEffect(() => {
     if (isTauri()) return;
     const params = new URLSearchParams(window.location.search);
-    if (params.has("demo")) {
-      startDemoLoop();
-      return;
-    }
     const forced = params.get("state");
     if (forced === "recording" || forced === "transcribing" || forced === "cleaning" || forced === "done" || forced === "error") {
       const warmup = params.get("warmup") === "1";

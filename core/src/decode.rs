@@ -20,11 +20,6 @@ pub fn decode_file(path: &Path) -> Result<Vec<f32>> {
     decode(Box::new(file), path.extension().and_then(|e| e.to_str()))
 }
 
-/// [`decode_file`] for in-memory audio (e.g. an `include_bytes!` asset).
-pub fn decode_bytes(bytes: &'static [u8], ext: &str) -> Result<Vec<f32>> {
-    decode(Box::new(std::io::Cursor::new(bytes)), Some(ext))
-}
-
 fn decode(source: Box<dyn MediaSource>, ext: Option<&str>) -> Result<Vec<f32>> {
     let mss = MediaSourceStream::new(source, Default::default());
     let mut hint = Hint::new();

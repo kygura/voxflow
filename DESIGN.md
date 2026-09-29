@@ -474,8 +474,7 @@ only the sizes and radii change.
   `--accent`. No left bar (the rounded fill is the marker now). The index doubles as the
   shortcut hint `Ctrl+N`.
 - **Tools block** (below nav, above footer, `border-top: 1px solid --line`, padding 12px):
-  two full-width secondary buttons stacked, gap 8: `Transcribe file…` and `Preview overlay`
-  (behaviour unchanged).
+  one full-width secondary button: `Transcribe file…`.
 - **Footer** (`border-top: 1px solid --line`, padding 16px 20px): `display: grid;
   grid-template-columns: 8px 1fr; column-gap: 10px; align-items: start`. Column 1: 8×8
   `--r-full` dot with `margin-top: 6px` so it centers on the first text line (dot `--text-2`
@@ -713,10 +712,9 @@ width`. Never `transition: all`. Every interactive element ≥ 28×28 hit area, 
 | `src/lib/ipc.ts` | schema additions: `pasteLastHotkey: string`, `dictionary: {from,to}[]`, `sounds: boolean`. |
 | `src-tauri/tauri.conf.json`, `src-tauri/src/dictation.rs` | pill window 440 × 240; position rule §2.1. |
 
-Demo: keep the `?state=` support in `pill.tsx` and add `?state=recording&warmup=1` (never
+Headless states: keep the `?state=` support in `pill.tsx` and add `?state=recording&warmup=1` (never
 receives a level), `?state=done&long=1` (a 6-line sample text to verify the 4-line clamp),
-`?state=done&flash=1` (text, no raw: the paste-last flash). The `?demo=1` loop feeds real
-levels from the bundled clip via the existing mock path (docs/ASSETS.md).
+`?state=done&flash=1` (text, no raw: the paste-last flash).
 
 ---
 
