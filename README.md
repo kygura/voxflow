@@ -1,5 +1,7 @@
 # VoxFlow
 
+A homemade, vibecoded alternative for people not paying $20/month for an LLM-assisted transcription wrapper.
+
 VoxFlow is a desktop voice-dictation app. Press your hotkey anywhere to record speech, transcribe it locally or via API, and paste the result into any focused window. Windows is the primary platform; X11 Linux is secondary.
 
 <p align="center">
@@ -174,6 +176,3 @@ bun run dev           # Browser preview (mock backend, no Tauri IPC)
 - **Modifier-only hotkeys:** Not supported (e.g., can't use Ctrl+Win with no letter; register shortcuts must include at least one non-modifier key)
 - **Model checksums:** Downloads are pinned to a fixed whisper.cpp HuggingFace commit and verified by size and SHA-256 before use
 
-## License
-
-[NSSL v1.0](LICENSE): the No-Subscription Slop License. Vibecoded because $20/month for dictation is a lot. Legally, it is the MIT License with a joke on top.
