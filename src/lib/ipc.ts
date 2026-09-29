@@ -3,6 +3,7 @@
 // before the rest of the app touches it.
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { z } from "zod";
 
 export const HotkeyModeSchema = z.enum(["hybrid", "push_to_talk", "toggle"]);
@@ -152,6 +153,7 @@ export const ipc = {
   cleanupPreview: (text: string) =>
     invoke("cleanup_preview", { text }).then((v) => CleanupPreviewSchema.parse(v)),
   transcribeFile: () => invoke<void>("transcribe_file"),
+  transcribePath: (path: string) => invoke<void>("transcribe_path", { path }),
   listModels: () => invoke("list_models").then((v) => ModelInfoListSchema.parse(v)),
   downloadModel: (name: string) => invoke<void>("download_model", { name }),
   cancelDownload: (name: string) => invoke<void>("cancel_download", { name }),
@@ -214,6 +216,21 @@ export function onHistoryChanged(cb: () => void): Promise<UnlistenFn> {
 
 export function onSettingsChanged(cb: () => void): Promise<UnlistenFn> {
   return listen("settings://changed", () => cb());
+}
+
+// Webview drag-and-drop (native paths). `over` only moves the cursor, so it is dropped here.
+export const FileDropEventSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("enter"), paths: z.array(z.string()) }),
+  z.object({ type: z.literal("drop"), paths: z.array(z.string()) }),
+  z.object({ type: z.literal("leave") }),
+]);
+export type FileDropEvent = z.infer<typeof FileDropEventSchema>;
+
+export function onFileDrop(cb: (e: FileDropEvent) => void): Promise<UnlistenFn> {
+  return getCurrentWebview().onDragDropEvent((e) => {
+    const parsed = FileDropEventSchema.safeParse(e.payload);
+    if (parsed.success) cb(parsed.data);
+  });
 }
 
 export const isTauri = () => "__TAURI_INTERNALS__" in window;

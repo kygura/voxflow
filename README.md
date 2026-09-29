@@ -31,6 +31,7 @@ First run: download a model in Settings → Transcription (local), or add an API
 ## Trying it without a microphone
 
 - **Transcribe file…** (Settings): wav/mp3/m4a/ogg/flac, up to 10 minutes
+- **Drag and drop**: drop an audio file on the window to transcribe it
 - **Cleanup playground** (Settings): compare basic vs AI cleanup on pasted text
 
 ## Building

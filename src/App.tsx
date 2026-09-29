@@ -11,6 +11,9 @@ import { Playground } from "./sections/Playground";
 import { History } from "./sections/History";
 import { About } from "./sections/About";
 import { applyTheme } from "./lib/theme";
+import { canStartFile } from "./lib/audio";
+import { useFileDrop } from "./lib/useFileDrop";
+import { DropOverlay } from "./components/DropOverlay";
 
 const SECTIONS = [
   "general",
@@ -107,10 +110,6 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [goToSection]);
 
-  if (!settings || !status) {
-    return <div className="app-loading" aria-busy="true" />;
-  }
-
   /** Surfaces any non-dictation failure (settings save, file transcribe, preview
    * overlay, playground run) in the same error banner, generically titled since
    * it isn't a dictation-flow "Transcription failed". */
@@ -119,6 +118,12 @@ export default function App() {
     setBannerTitle("Something failed");
     setBannerDismissed(false);
   };
+
+  const dropState = useFileDrop(!status || !canStartFile(status.state), surfaceError);
+
+  if (!settings || !status) {
+    return <div className="app-loading" aria-busy="true" />;
+  }
 
   const refreshStatus = () => {
     api.getStatus().then(setStatus);
@@ -197,6 +202,7 @@ export default function App() {
         )}
         {section === "about" && <About settings={settings} status={status} />}
       </main>
+      {dropState && <DropOverlay state={dropState} />}
     </div>
   );
 }

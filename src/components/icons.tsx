@@ -106,6 +106,16 @@ export function File({ size = 14 }: { size?: number }) {
   );
 }
 
+export function Upload({ size = 14 }: { size?: number }) {
+  return (
+    <svg {...svgProps(size)}>
+      <path d="M12 16V4" />
+      <path d="M7 9l5-5 5 5" />
+      <path d="M4 16v4h16v-4" />
+    </svg>
+  );
+}
+
 export function Book({ size = 14 }: { size?: number }) {
   return (
     <svg {...svgProps(size)}>

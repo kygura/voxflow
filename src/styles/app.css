@@ -1081,6 +1081,97 @@ textarea {
   flex: none;
 }
 
+/* --- Drop overlay (file dragged over the window) --- */
+
+.drop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  padding: var(--sp-6);
+  background: color-mix(in srgb, var(--bg-0) 82%, transparent);
+  pointer-events: none;
+  animation: drop-fade var(--dur-2) var(--ease-out);
+}
+
+.drop-zone {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  padding: var(--sp-6);
+  border: var(--bw-focus) dashed var(--accent);
+  border-radius: var(--r-3);
+  background: var(--accent-soft);
+  text-align: center;
+  animation: drop-zone-in var(--dur-3) var(--ease-out);
+}
+
+.drop-zone-icon {
+  display: flex;
+  color: var(--accent);
+}
+
+.drop-zone-title {
+  margin: 0;
+  font-size: var(--fs-lg);
+  line-height: 24px;
+  font-weight: 600;
+  color: var(--text-0);
+}
+
+.drop-zone-hint {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--text-1);
+}
+
+.drop-overlay--unsupported .drop-zone {
+  border-color: var(--err);
+  background: var(--err-soft);
+}
+
+.drop-overlay--unsupported .drop-zone-icon {
+  color: var(--err);
+}
+
+.drop-overlay--busy .drop-zone {
+  border-color: var(--line-strong);
+  background: var(--bg-1);
+}
+
+.drop-overlay--busy .drop-zone-icon {
+  color: var(--text-2);
+}
+
+@keyframes drop-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes drop-zone-in {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drop-zone {
+    animation-name: drop-fade;
+  }
+}
+
 /* --- Model list --- */
 
 .models-helper {

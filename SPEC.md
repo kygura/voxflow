@@ -172,7 +172,9 @@ absent when identical or for old entries). UI shows cleaned text with a toggle t
   (`tauri-plugin-dialog`, filters wav/mp3/m4a/ogg/flac), decodes with pure-Rust `symphonia`
   (`voxflow-core::decode`), downmixes + resamples to 16 kHz mono, and runs the same pipeline
   as dictation (transcribe → cleanup → clipboard + history, no auto-paste, pill shows
-  transcribing/cleaning/done). Max 10 minutes of audio.
+  transcribing/cleaning/done). Max 10 minutes of audio. Dropping an audio file on the main window
+  does the same via `transcribe_path` (first path only; the overlay shows ready / unsupported /
+  busy states, and drops while busy or with a bad extension surface an error banner instead).
 - **Cleanup playground** — settings section: paste raw text → `cleanup_preview` shows basic and
   ai outputs side by side (ai column shows its error/fallback note when it fails or isn't
   configured).

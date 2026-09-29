@@ -273,7 +273,8 @@ pub fn run() {
             commands::test_ai,
             commands::cleanup_preview,
             commands::transcribe_file,
-                    ])
+            commands::transcribe_path,
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

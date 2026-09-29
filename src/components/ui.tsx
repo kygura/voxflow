@@ -2,6 +2,7 @@
 import { forwardRef, useEffect, useId, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { File, Search, X } from "./icons";
+import { canStartFile } from "../lib/audio";
 
 export function Sidebar({
   active,
@@ -33,7 +34,7 @@ export function Sidebar({
 
   // DESIGN.md §3.1: disabled while a dictation/transcription is actually in
   // flight; allowed again once it lands on idle, done or error.
-  const canTranscribeFile = fileStatus === "idle" || fileStatus === "done" || fileStatus === "error";
+  const canTranscribeFile = canStartFile(fileStatus);
   const isFileBusy = fileStatus === "transcribing" || fileStatus === "cleaning";
 
   return (

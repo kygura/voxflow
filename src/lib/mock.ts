@@ -195,7 +195,8 @@ export const mockApi = {
     }
     return { basic, ai: mockBasicCleanup(text) };
   },
-  transcribeFile: async () => {
+  transcribePath: (_path: string): Promise<void> => mockApi.transcribeFile(),
+  transcribeFile: async (): Promise<void> => {
     // ponytail: mock has no file picker; just runs the transcribing → cleaning →
     // done sequence a real file transcription goes through, same as stopDictation.
     cancelAutoHide();
@@ -356,6 +357,8 @@ export const mockEvents = {
     return () => historyListeners.delete(cb);
   },
   onSettingsChanged: async () => () => {},
+  // No native paths in a browser, so there is nothing to drop.
+  onFileDrop: async (_cb: unknown) => () => {},
 };
 
 /** Used only by pill.tsx?state= to force a visual state without a full flow. */

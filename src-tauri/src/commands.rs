@@ -3,6 +3,7 @@
 use crate::dictation::{Input, Phase};
 use crate::{ai_key, api_key, keyring_entry, AppState, KEY_AI, KEY_REMOTE};
 use serde::Serialize;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager, State, Wry};
@@ -275,14 +276,39 @@ fn idle_check(phase: Phase) -> Res {
     }
 }
 
-/// Native picker, then the dictation pipeline (clipboard only, no auto-paste). Cancel → Ok.
+const AUDIO_EXTS: [&str; 5] = ["wav", "mp3", "m4a", "ogg", "flac"];
+
+fn has_audio_ext(path: &Path) -> bool {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| AUDIO_EXTS.iter().any(|x| e.eq_ignore_ascii_case(x)))
+}
+
+/// Shared by the picker and drag-and-drop: validate, then hand the path to the dictation
+/// pipeline (transcribe -> cleanup -> clipboard + history, no auto-paste).
+fn start_file(state: &AppState, path: PathBuf) -> Res {
+    ensure_idle(state)?; // a dictation may have started while the picker was open
+    if !has_audio_ext(&path) {
+        return Err(format!(
+            "Unsupported file type (use {})",
+            AUDIO_EXTS.join(", ")
+        ));
+    }
+    if !path.is_file() {
+        return Err("File not found".into());
+    }
+    let _ = state.tx.send(Input::File(path));
+    Ok(())
+}
+
+/// Native picker, then the shared file pipeline. Cancel → Ok.
 #[tauri::command]
 pub async fn transcribe_file(app: AppHandle) -> Res {
     ensure_idle(&app.state::<AppState>())?;
     let picker = app.clone();
     // blocking_pick_file must not run on the main thread; the blocking pool is fine.
     let picked = tauri::async_runtime::spawn_blocking(move || {
-        let mut dialog = picker.dialog().file().add_filter("Audio", &["wav", "mp3", "m4a", "ogg", "flac"]);
+        let mut dialog = picker.dialog().file().add_filter("Audio", &AUDIO_EXTS);
         if let Some(main) = picker.get_webview_window("main") {
             dialog = dialog.set_parent(&main);
         }
@@ -292,10 +318,13 @@ pub async fn transcribe_file(app: AppHandle) -> Res {
     .map_err(err)?;
     let Some(file) = picked else { return Ok(()) };
     let path = file.into_path().map_err(err)?;
-    let state = app.state::<AppState>();
-    ensure_idle(&state)?; // a dictation may have started while the picker was open
-    let _ = state.tx.send(Input::File(path));
-    Ok(())
+    start_file(&app.state::<AppState>(), path)
+}
+
+/// Drag-and-drop entry: same pipeline as `transcribe_file`, with a path from the webview.
+#[tauri::command]
+pub fn transcribe_path(state: State<AppState>, path: String) -> Res {
+    start_file(&state, PathBuf::from(path))
 }
 
 #[tauri::command]
@@ -410,6 +439,24 @@ mod tests {
             if name == "restore fails" {
                 assert_eq!(res.unwrap_err(), "Could not register hotkey D: taken; restoring hotkey B failed: taken");
             }
+        }
+    }
+
+    #[test]
+    fn audio_ext_check() {
+        for (name, ok) in [
+            ("a.wav", true),
+            ("a.MP3", true),
+            ("/x/y.m4a", true),
+            ("a.tar.ogg", true),
+            ("a.Flac", true),
+            ("a.txt", false),
+            ("a.wav.exe", false),
+            ("wav", false),
+            (".wav", false),
+            ("", false),
+        ] {
+            assert_eq!(has_audio_ext(Path::new(name)), ok, "{name}");
         }
     }
 
