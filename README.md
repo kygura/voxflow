@@ -2,6 +2,17 @@
 
 VoxFlow is a desktop voice-dictation app. Press your hotkey anywhere to record speech, transcribe it locally or via API, and paste the result into any focused window. Windows is the primary platform; X11 Linux is secondary.
 
+<p align="center">
+  <img src="docs/screenshots/pill-recording.png" width="360" alt="Recording pill with live waveform">
+  <img src="docs/screenshots/pill-done.png" width="360" alt="Done pill with cleaned transcript bubble">
+</p>
+
+![Settings: General](docs/screenshots/settings-general.png)
+
+## Download
+
+Windows builds are produced by CI ([windows workflow](.github/workflows/windows.yml)): grab `voxflow.exe` from the latest run's artifacts, or from a [release](../../releases) when a `v*` tag is pushed. Binaries are unsigned (see [Known limitations](#known-limitations)).
+
 ## Features
 
 - **Global hotkey** (default Ctrl+Shift+Space): hold to record, release to transcribe (push-to-talk); or tap for hands-free mode
@@ -45,6 +56,18 @@ The pill overlay (bottom-center) shows recording state with a live waveform, tra
 - **Groq:** `https://api.groq.com/openai/v1`
 - **OpenRouter:** `https://openrouter.ai/api/v1`
 - **Anthropic:** `https://api.anthropic.com/v1`
+
+## Screenshots
+
+| Cleanup | Playground |
+| --- | --- |
+| ![Cleanup settings](docs/screenshots/settings-cleanup.png) | ![Cleanup playground](docs/screenshots/settings-playground.png) |
+| **Transcription** | **Dictionary** |
+| ![Transcription settings](docs/screenshots/settings-transcription.png) | ![Personal dictionary](docs/screenshots/settings-dictionary.png) |
+| **History** | **Warm-up error** |
+| ![History](docs/screenshots/settings-history.png) | ![Microphone not responding](docs/screenshots/pill-error.png) |
+
+Screenshots are taken from the browser preview (`bun run dev`, mock backend); the pill accepts `pill.html?state=recording|transcribing|cleaning|done|error` to freeze a state.
 
 ## Testing without a microphone
 
